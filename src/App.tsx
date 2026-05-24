@@ -12,7 +12,7 @@ import Settings from './pages/Settings'
 
 export type Page = 'dashboard' | 'companies' | 'users' | 'subscriptions' | 'forms' | 'audit' | 'settings'
 
-// ── Dev bypass: set VITE_DEV_BYPASS=true in .env to skip login (TEST) ──────────────
+// ── Dev bypass: set VITE_DEV_BYPASS=true in .env to skip login ──────────────
 const DEV_BYPASS = import.meta.env.VITE_DEV_BYPASS === 'true'
 const DEV_PROFILE = { fullName: 'mbstoure (dev)', email: 'mbstoure@gmail.com', role: 'super_admin' }
 
