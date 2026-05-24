@@ -1,0 +1,5 @@
+/*
+ * Cloudflare Pages SPA redirect
+ * All routes → index.html, 200 (not 301)
+ */
+/* index.html 200 */
