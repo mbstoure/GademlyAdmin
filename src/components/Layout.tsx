@@ -19,6 +19,7 @@ import {
   UserCircle,
   ChevronDown,
   ShieldCheck,
+  Scale,
 } from 'lucide-react'
 import { Toaster } from './ui/sonner'
 
@@ -37,6 +38,7 @@ const NAV: NavItem[] = [
   { id: 'subscriptions', label: 'Subscriptions', icon: CreditCard },
   { id: 'forms',         label: 'Forms',         icon: FileText },
   { id: 'audit',         label: 'Audit Log',     icon: ClipboardList },
+  { id: 'legal',         label: 'Legal Docs',    icon: Scale },
   { id: 'settings',      label: 'Settings',      icon: Settings },
 ]
 

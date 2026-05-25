@@ -60,4 +60,14 @@ export const adminApi = {
   // Settings
   getSettings: () => req<any>('GET', '/make-server-c6b0f6c0/admin/settings'),
   updateSettings: (data: unknown) => req<any>('PUT', '/make-server-c6b0f6c0/admin/settings', data),
+
+  // Legal CMS
+  getLegalConfig: () => req<any>('GET', '/make-server-c6b0f6c0/legal/config'),
+  getLegalContent: (doc: string) => req<any>('GET', `/make-server-c6b0f6c0/legal/content/${doc}`),
+  saveLegalContent: (doc: string, content: string) =>
+    req<any>('PUT', `/make-server-c6b0f6c0/legal/content/${doc}`, { content }),
+  updateLegalConfig: (doc: string, meta: { version: string; effectiveDate: string; changes: string[] }) =>
+    req<any>('PUT', '/make-server-c6b0f6c0/legal/config', { doc, ...meta }),
+  publishLegal: (doc: string, payload: { version: string; effectiveDate: string; changes: string[]; content: string }) =>
+    req<any>('POST', '/make-server-c6b0f6c0/legal/publish', { doc, ...payload }),
 }

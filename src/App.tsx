@@ -9,8 +9,9 @@ import Subscriptions from './pages/Subscriptions'
 import Forms from './pages/Forms'
 import AuditLog from './pages/AuditLog'
 import Settings from './pages/Settings'
+import LegalDocs from './pages/LegalDocs'
 
-export type Page = 'dashboard' | 'companies' | 'users' | 'subscriptions' | 'forms' | 'audit' | 'settings'
+export type Page = 'dashboard' | 'companies' | 'users' | 'subscriptions' | 'forms' | 'audit' | 'settings' | 'legal'
 
 // ── Dev bypass: set VITE_DEV_BYPASS=true in .env to skip login ──────────────
 const DEV_BYPASS = import.meta.env.VITE_DEV_BYPASS === 'true'
@@ -75,13 +76,14 @@ function App() {
   if (!session || !profile) return <Login />
 
   const pages: Record<Page, React.ReactElement> = {
-    dashboard: <Dashboard />,
-    companies: <Companies />,
-    users: <Users />,
+    dashboard:     <Dashboard />,
+    companies:     <Companies />,
+    users:         <Users />,
     subscriptions: <Subscriptions />,
-    forms: <Forms />,
-    audit: <AuditLog />,
-    settings: <Settings />,
+    forms:         <Forms />,
+    audit:         <AuditLog />,
+    settings:      <Settings />,
+    legal:         <LegalDocs />,
   }
 
   return (
