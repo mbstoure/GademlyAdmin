@@ -74,8 +74,8 @@ export default function Forms() {
               </tr>
             </thead>
             <tbody className="divide-y divide-border">
-              {filtered.map(f => (
-                <tr key={f.id} className="hover:bg-accent/30 transition-colors">
+              {filtered.map((f, idx) => (
+                <tr key={f.id || idx} className="hover:bg-accent/30 transition-colors">
                   <td className="px-4 py-3 font-medium">{f.name}</td>
                   <td className="px-4 py-3 text-muted-foreground hidden md:table-cell">{f.companyName}</td>
                   <td className="px-4 py-3 text-muted-foreground hidden lg:table-cell">{f.submissionCount ?? 0}</td>

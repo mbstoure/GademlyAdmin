@@ -132,8 +132,8 @@ export default function Users() {
               </tr>
             </thead>
             <tbody className="divide-y divide-border">
-              {filtered.map(u => (
-                <tr key={u.id} className="hover:bg-accent/30 transition-colors">
+              {filtered.map((u, idx) => (
+                <tr key={u.id || u.email || idx} className="hover:bg-accent/30 transition-colors">
                   <td className="px-4 py-3 font-medium">{u.fullName || '—'}</td>
                   <td className="px-4 py-3 text-muted-foreground hidden md:table-cell">{u.email}</td>
                   <td className="px-4 py-3">

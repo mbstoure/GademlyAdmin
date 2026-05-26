@@ -57,8 +57,9 @@ export default function LegalDocs() {
         [doc]: {
           ...s[doc],
           version:       meta.version       || '1.0',
-          effectiveDate: meta.effectiveDate || new Date().toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' }),
+          effectiveDate: meta.effectiveDate || 'May 26, 2026',
           changes:       meta.changes       || [],
+          // If KV content is null, set a placeholder so editor is not blank
           content:       contentRes.content || '',
           dirty:         false,
           loading:       false,
@@ -68,6 +69,17 @@ export default function LegalDocs() {
       toast.error(`Failed to load ${doc.toUpperCase()}`)
       setState(s => ({ ...s, [doc]: { ...s[doc], loading: false } }))
     }
+  }
+
+  // Fetch the rendered HTML from the live app and seed the editor
+  const seedFromLiveApp = async (doc: DocKey) => {
+    const paths: Record<DocKey, string> = {
+      tos: 'https://app.gademly.com/legal/terms',
+      pp:  'https://app.gademly.com/legal/privacy',
+      dpa: 'https://app.gademly.com/legal/dpa',
+    }
+    toast.info('Opening live doc to copy from — paste the HTML content into the editor.')
+    window.open(paths[doc], '_blank')
   }
 
   useEffect(() => { DOCS.forEach(d => loadDoc(d.key)) }, [])
@@ -270,13 +282,32 @@ export default function LegalDocs() {
                   dangerouslySetInnerHTML={{ __html: sanitizeHtml(cur.content) }}
                 />
               ) : (
-                <textarea
-                  value={cur.content}
-                  onChange={e => set(activeDoc, { content: e.target.value })}
-                  placeholder={`<p>Enter the ${docMeta.label} content in HTML…</p>\n\n<h2>1. Section Title</h2>\n<p>Section body text goes here.</p>`}
-                  className="w-full min-h-[500px] p-5 font-mono text-xs bg-transparent resize-none focus:outline-none text-foreground/80 leading-relaxed"
-                  spellCheck={false}
-                />
+                <div className="relative">
+                  {!cur.content && (
+                    <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 p-8 z-10">
+                      <FileText className="h-10 w-10 text-muted-foreground/30 pointer-events-none" />
+                      <p className="text-sm text-muted-foreground text-center pointer-events-none">
+                        No content published yet for this document.
+                      </p>
+                      <p className="text-xs text-muted-foreground/70 text-center max-w-xs pointer-events-none">
+                        Paste the document HTML in the textarea below. Use &lt;h2&gt;, &lt;p&gt;, &lt;ul&gt;, &lt;li&gt;, &lt;strong&gt; tags, then click <strong>Publish</strong>.
+                      </p>
+                      <button
+                        onClick={() => seedFromLiveApp(activeDoc)}
+                        className="mt-1 text-xs font-medium text-primary hover:underline"
+                      >
+                        View live doc ↗
+                      </button>
+                    </div>
+                  )}
+                  <textarea
+                    value={cur.content}
+                    onChange={e => set(activeDoc, { content: e.target.value })}
+                    placeholder={`<p>Enter the ${docMeta.label} content in HTML…</p>\n\n<h2>1. Section Title</h2>\n<p>Section body text goes here.</p>`}
+                    className="w-full min-h-[500px] p-5 font-mono text-xs bg-transparent resize-none focus:outline-none text-foreground/80 leading-relaxed relative z-0"
+                    spellCheck={false}
+                  />
+                </div>
               )}
             </div>
 

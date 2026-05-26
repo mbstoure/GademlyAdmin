@@ -70,4 +70,17 @@ export const adminApi = {
     req<any>('PUT', '/make-server-c6b0f6c0/legal/config', { doc, ...meta }),
   publishLegal: (doc: string, payload: { version: string; effectiveDate: string; changes: string[]; content: string }) =>
     req<any>('POST', '/make-server-c6b0f6c0/legal/publish', { doc, ...payload }),
+
+  // Notifications
+  getBroadcasts: (limit = 20) =>
+    req<any>('GET', `/make-server-c6b0f6c0/admin/notifications/broadcasts?limit=${limit}`),
+  broadcast: (payload: {
+    title: string;
+    body: string;
+    link?: string;
+    priority?: string;
+    targetCompanyId?: string;
+  }) => req<any>('POST', '/make-server-c6b0f6c0/admin/notifications/broadcast', payload),
+  sendDigest: (digestType: 'daily' | 'weekly') =>
+    req<any>('POST', '/make-server-c6b0f6c0/admin/notifications/send-digest', { digestType }),
 }

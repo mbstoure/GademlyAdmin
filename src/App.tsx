@@ -10,8 +10,9 @@ import Forms from './pages/Forms'
 import AuditLog from './pages/AuditLog'
 import Settings from './pages/Settings'
 import LegalDocs from './pages/LegalDocs'
+import Notifications from './pages/Notifications'
 
-export type Page = 'dashboard' | 'companies' | 'users' | 'subscriptions' | 'forms' | 'audit' | 'settings' | 'legal'
+export type Page = 'dashboard' | 'companies' | 'users' | 'subscriptions' | 'forms' | 'audit' | 'settings' | 'legal' | 'notifications'
 
 // ── Dev bypass: set VITE_DEV_BYPASS=true in .env to skip login ──────────────
 const DEV_BYPASS = import.meta.env.VITE_DEV_BYPASS === 'true'
@@ -84,6 +85,7 @@ function App() {
     audit:         <AuditLog />,
     settings:      <Settings />,
     legal:         <LegalDocs />,
+    notifications: <Notifications />,
   }
 
   return (

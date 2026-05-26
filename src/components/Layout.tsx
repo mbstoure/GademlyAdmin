@@ -20,6 +20,7 @@ import {
   ChevronDown,
   ShieldCheck,
   Scale,
+  Bell,
 } from 'lucide-react'
 import { Toaster } from './ui/sonner'
 
@@ -32,14 +33,15 @@ interface NavItem {
 }
 
 const NAV: NavItem[] = [
-  { id: 'dashboard',     label: 'Dashboard',     icon: LayoutDashboard },
-  { id: 'companies',     label: 'Companies',     icon: Building2 },
-  { id: 'users',         label: 'Users',         icon: Users },
+  { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
+  { id: 'companies', label: 'Companies', icon: Building2 },
+  { id: 'users', label: 'Users', icon: Users },
   { id: 'subscriptions', label: 'Subscriptions', icon: CreditCard },
-  { id: 'forms',         label: 'Forms',         icon: FileText },
-  { id: 'audit',         label: 'Audit Log',     icon: ClipboardList },
-  { id: 'legal',         label: 'Legal Docs',    icon: Scale },
-  { id: 'settings',      label: 'Settings',      icon: Settings },
+  { id: 'forms', label: 'Forms', icon: FileText },
+  { id: 'audit', label: 'Audit Log', icon: ClipboardList },
+  { id: 'notifications', label: 'Notifications', icon: Bell },
+  { id: 'legal', label: 'Legal Docs', icon: Scale },
+  { id: 'settings', label: 'Settings', icon: Settings },
 ]
 
 interface LayoutProps {
