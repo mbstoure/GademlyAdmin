@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import {
   FileText, Save, Upload, Eye, EyeOff, Plus, Trash2,
-  Loader2, Check, AlertTriangle, Globe,
+  Loader2, Check, AlertTriangle, Globe, Languages, X,
 } from 'lucide-react'
 import { adminApi } from '../lib/api'
 import { toast } from 'sonner'
@@ -12,7 +12,8 @@ const sanitizeHtml = (html: string) =>
       .replace(/on\w+="[^"]*"/gi, '')
       .replace(/on\w+='[^']*'/gi, '')
 
-type DocKey = 'tos' | 'pp' | 'dpa'
+type DocKey  = 'tos' | 'pp' | 'dpa'
+type LangKey = 'en' | 'ar' | 'fr'
 
 const DOCS: { key: DocKey; label: string; icon: string }[] = [
   { key: 'tos', label: 'Terms of Service',        icon: '📋' },
@@ -20,36 +21,62 @@ const DOCS: { key: DocKey; label: string; icon: string }[] = [
   { key: 'dpa', label: 'Data Processing Addendum', icon: '🛡️' },
 ]
 
-export default function LegalDocs() {
-  const [activeDoc, setActiveDoc] = useState<DocKey>('tos')
-  const [preview, setPreview]     = useState(false)
+const LANGS: { key: LangKey; flag: string; label: string }[] = [
+  { key: 'en', flag: '🇬🇧', label: 'English' },
+  { key: 'ar', flag: '🇸🇦', label: 'Arabic'  },
+  { key: 'fr', flag: '🇫🇷', label: 'French'  },
+]
 
-  // Per-doc state
-  const [state, setState] = useState<Record<DocKey, {
-    version: string
-    effectiveDate: string
-    changes: string[]
-    content: string
-    dirty: boolean
-    loading: boolean
-  }>>({
-    tos: { version: '1.0', effectiveDate: '', changes: [], content: '', dirty: false, loading: true },
-    pp:  { version: '1.0', effectiveDate: '', changes: [], content: '', dirty: false, loading: true },
-    dpa: { version: '1.0', effectiveDate: '', changes: [], content: '', dirty: false, loading: true },
+type DocState = {
+  version:       string
+  effectiveDate: string
+  changes:       string[]
+  dirty:         boolean
+  loading:       boolean
+  // Content per language
+  content: Record<LangKey, string>
+  // Which langs have been saved/published in this session
+  savedLangs: Set<LangKey>
+}
+
+type AllState = Record<DocKey, DocState>
+
+const emptyDoc = (): DocState => ({
+  version:       '1.0',
+  effectiveDate: '',
+  changes:       [],
+  dirty:         false,
+  loading:       true,
+  content:       { en: '', ar: '', fr: '' },
+  savedLangs:    new Set(),
+})
+
+export default function LegalDocs() {
+  const [activeDoc,  setActiveDoc]  = useState<DocKey>('tos')
+  const [activeLang, setActiveLang] = useState<LangKey>('en')
+  const [preview,    setPreview]    = useState(false)
+
+  const [state, setState] = useState<AllState>({
+    tos: emptyDoc(),
+    pp:  emptyDoc(),
+    dpa: emptyDoc(),
   })
 
-  const [publishing, setPublishing] = useState(false)
-  const [saving,     setSaving]     = useState(false)
-  const [showConfirm, setShowConfirm] = useState(false)
+  const [publishing,   setPublishing]   = useState(false)
+  const [saving,       setSaving]       = useState(false)
+  const [showConfirm,  setShowConfirm]  = useState(false)
   const [publishResult, setPublishResult] = useState<any>(null)
 
-  // Load doc from API
+  // Reminder banner: set when user publishes only some languages
+  const [reminder, setReminder] = useState<{ doc: DocKey; publishedLang: LangKey } | null>(null)
+
+  // ── Fetch doc config once + content per-lang lazily ───────────────────────
   const loadDoc = async (doc: DocKey) => {
     setState(s => ({ ...s, [doc]: { ...s[doc], loading: true } }))
     try {
-      const [configRes, contentRes] = await Promise.all([
+      const [configRes, enRes] = await Promise.all([
         adminApi.getLegalConfig(),
-        adminApi.getLegalContent(doc),
+        adminApi.getLegalContent(doc, 'en'),
       ])
       const meta = configRes.config?.[doc] || {}
       setState(s => ({
@@ -59,54 +86,59 @@ export default function LegalDocs() {
           version:       meta.version       || '1.0',
           effectiveDate: meta.effectiveDate || 'May 26, 2026',
           changes:       meta.changes       || [],
-          // If KV content is null, set a placeholder so editor is not blank
-          content:       contentRes.content || '',
+          content:       { ...s[doc].content, en: enRes.content || '' },
           dirty:         false,
           loading:       false,
         },
       }))
-    } catch (e) {
+    } catch {
       toast.error(`Failed to load ${doc.toUpperCase()}`)
       setState(s => ({ ...s, [doc]: { ...s[doc], loading: false } }))
     }
   }
 
-  // Fetch the rendered HTML from the live app and seed the editor
-  const seedFromLiveApp = async (doc: DocKey) => {
-    const paths: Record<DocKey, string> = {
-      tos: 'https://app.gademly.com/legal/terms',
-      pp:  'https://app.gademly.com/legal/privacy',
-      dpa: 'https://app.gademly.com/legal/dpa',
+  // Load language-specific content on tab switch (lazy)
+  const loadLangContent = async (doc: DocKey, lang: LangKey) => {
+    if (lang === 'en') return // already loaded
+    const cur = state[doc]
+    if (cur.content[lang] !== '' || cur.loading) return // already loaded or loading
+    try {
+      const res = await adminApi.getLegalContent(doc, lang)
+      setState(s => ({
+        ...s,
+        [doc]: { ...s[doc], content: { ...s[doc].content, [lang]: res.content || '' } },
+      }))
+    } catch {
+      // ignore — content may just not exist yet
     }
-    toast.info('Opening live doc to copy from — paste the HTML content into the editor.')
-    window.open(paths[doc], '_blank')
   }
 
   useEffect(() => { DOCS.forEach(d => loadDoc(d.key)) }, [])
+  useEffect(() => { loadLangContent(activeDoc, activeLang) }, [activeDoc, activeLang])
 
-  const set = (doc: DocKey, patch: Partial<typeof state['tos']>) =>
+  const set = (doc: DocKey, patch: Partial<Omit<DocState, 'content' | 'savedLangs'>>) =>
     setState(s => ({ ...s, [doc]: { ...s[doc], ...patch, dirty: true } }))
 
-  const addChange = (doc: DocKey) =>
-    set(doc, { changes: [...state[doc].changes, ''] })
+  const setContent = (doc: DocKey, lang: LangKey, val: string) =>
+    setState(s => ({
+      ...s,
+      [doc]: { ...s[doc], content: { ...s[doc].content, [lang]: val }, dirty: true },
+    }))
 
+  const addChange    = (doc: DocKey) => set(doc, { changes: [...state[doc].changes, ''] })
   const updateChange = (doc: DocKey, i: number, val: string) => {
-    const c = [...state[doc].changes]
-    c[i] = val
-    set(doc, { changes: c })
+    const c = [...state[doc].changes]; c[i] = val; set(doc, { changes: c })
   }
-
   const removeChange = (doc: DocKey, i: number) => {
-    const c = state[doc].changes.filter((_, j) => j !== i)
-    set(doc, { changes: c })
+    set(doc, { changes: state[doc].changes.filter((_, j) => j !== i) })
   }
 
-  // Save draft (content only, no version bump)
+  // Save draft for current doc + current lang
   const saveDraft = async () => {
     setSaving(true)
     try {
       await Promise.all([
-        adminApi.saveLegalContent(activeDoc, state[activeDoc].content),
+        adminApi.saveLegalContent(activeDoc, state[activeDoc].content[activeLang], activeLang),
         adminApi.updateLegalConfig(activeDoc, {
           version:       state[activeDoc].version,
           effectiveDate: state[activeDoc].effectiveDate,
@@ -114,14 +146,14 @@ export default function LegalDocs() {
         }),
       ])
       setState(s => ({ ...s, [activeDoc]: { ...s[activeDoc], dirty: false } }))
-      toast.success('Draft saved')
+      toast.success(`Draft saved (${LANGS.find(l => l.key === activeLang)?.label})`)
     } catch {
       toast.error('Failed to save draft')
     }
     setSaving(false)
   }
 
-  // Publish (bumps version, triggers emails + re-consent)
+  // Publish current doc + current lang — then show reminder for other langs
   const publish = async () => {
     setPublishing(true)
     setShowConfirm(false)
@@ -130,22 +162,73 @@ export default function LegalDocs() {
         version:       state[activeDoc].version,
         effectiveDate: state[activeDoc].effectiveDate,
         changes:       state[activeDoc].changes,
-        content:       state[activeDoc].content,
+        content:       state[activeDoc].content[activeLang],
+        lang:          activeLang,
       })
       setPublishResult(res)
-      setState(s => ({ ...s, [activeDoc]: { ...s[activeDoc], dirty: false } }))
-      toast.success(`Published v${state[activeDoc].version} — users will be notified on next login`)
+      setState(s => ({
+        ...s,
+        [activeDoc]: {
+          ...s[activeDoc],
+          dirty:      false,
+          savedLangs: new Set([...s[activeDoc].savedLangs, activeLang]),
+        },
+      }))
+      toast.success(`Published v${state[activeDoc].version} (${LANGS.find(l => l.key === activeLang)?.label}) — users will be notified on next login`)
+
+      // Show reminder if not all languages are published
+      const missingLangs = LANGS.filter(l => l.key !== activeLang && !state[activeDoc].savedLangs.has(l.key))
+      if (missingLangs.length > 0) {
+        setReminder({ doc: activeDoc, publishedLang: activeLang })
+      }
     } catch {
       toast.error('Failed to publish')
     }
     setPublishing(false)
   }
 
-  const cur = state[activeDoc]
+  const cur     = state[activeDoc]
   const docMeta = DOCS.find(d => d.key === activeDoc)!
+  const curContent = cur.content[activeLang]
+
+  const missingLangs = reminder
+    ? LANGS.filter(l => l.key !== reminder.publishedLang && !state[reminder.doc].savedLangs.has(l.key))
+    : []
 
   return (
     <div className="space-y-6">
+      {/* Reminder banner */}
+      {reminder && missingLangs.length > 0 && (
+        <div className="rounded-xl border border-amber-300 bg-amber-50 dark:bg-amber-950/30 dark:border-amber-800 p-4 flex items-start gap-3">
+          <AlertTriangle className="h-5 w-5 text-amber-600 shrink-0 mt-0.5" />
+          <div className="flex-1 min-w-0">
+            <p className="text-sm font-semibold text-amber-800 dark:text-amber-200">
+              You just published the {LANGS.find(l => l.key === reminder.publishedLang)?.label} version of {DOCS.find(d => d.key === reminder.doc)?.label}.
+            </p>
+            <p className="text-xs text-amber-700 dark:text-amber-300 mt-0.5">
+              Don't forget to update the other language versions too.
+            </p>
+            <div className="flex items-center gap-2 mt-2 flex-wrap">
+              {missingLangs.map(l => (
+                <button
+                  key={l.key}
+                  onClick={() => {
+                    setActiveDoc(reminder.doc)
+                    setActiveLang(l.key)
+                  }}
+                  className="text-xs font-semibold px-3 py-1.5 rounded-md bg-amber-100 dark:bg-amber-900/40 text-amber-800 dark:text-amber-200 hover:bg-amber-200 dark:hover:bg-amber-900/60 transition-colors"
+                >
+                  {l.flag} Update {l.label} →
+                </button>
+              ))}
+            </div>
+          </div>
+          <button onClick={() => setReminder(null)} className="text-amber-600 hover:text-amber-800 transition-colors">
+            <X className="h-4 w-4" />
+          </button>
+        </div>
+      )}
+
       {/* Header */}
       <div className="flex items-start justify-between gap-4">
         <div>
@@ -154,7 +237,7 @@ export default function LegalDocs() {
             Legal Documents
           </h1>
           <p className="text-muted-foreground mt-1">
-            Edit and publish Terms of Service, Privacy Policy, and DPA.
+            Edit and publish Terms of Service, Privacy Policy, and DPA in multiple languages.
             Publishing bumps the version and triggers re-consent for all users on next login.
           </p>
         </div>
@@ -179,6 +262,33 @@ export default function LegalDocs() {
             )}
           </button>
         ))}
+      </div>
+
+      {/* Language tabs */}
+      <div className="flex items-center gap-2">
+        <Languages className="h-4 w-4 text-muted-foreground shrink-0" />
+        <div className="flex gap-1 bg-muted rounded-lg p-1">
+          {LANGS.map(l => (
+            <button
+              key={l.key}
+              onClick={() => setActiveLang(l.key)}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-semibold transition-all ${
+                activeLang === l.key
+                  ? 'bg-background shadow text-foreground'
+                  : 'text-muted-foreground hover:text-foreground'
+              }`}
+            >
+              <span>{l.flag}</span>
+              <span>{l.label}</span>
+              {state[activeDoc].savedLangs.has(l.key) && (
+                <Check className="h-3 w-3 text-green-500" />
+              )}
+            </button>
+          ))}
+        </div>
+        <span className="text-xs text-muted-foreground ml-1">
+          Editing: <strong>{LANGS.find(l => l.key === activeLang)?.label}</strong> version
+        </span>
       </div>
 
       {cur.loading ? (
@@ -255,7 +365,12 @@ export default function LegalDocs() {
             <div className="rounded-xl border bg-card overflow-hidden">
               <div className="flex items-center justify-between px-4 py-3 border-b border-border bg-muted/30">
                 <div>
-                  <p className="text-sm font-semibold">Document Content</p>
+                  <p className="text-sm font-semibold">
+                    Document Content
+                    <span className="ml-2 text-xs text-muted-foreground font-normal">
+                      {LANGS.find(l => l.key === activeLang)?.flag} {LANGS.find(l => l.key === activeLang)?.label}
+                    </span>
+                  </p>
                   <p className="text-xs text-muted-foreground">HTML format — use &lt;h2&gt;, &lt;h3&gt;, &lt;p&gt;, &lt;ul&gt;, &lt;li&gt;, &lt;strong&gt;, &lt;table&gt;</p>
                 </div>
                 <button
@@ -268,7 +383,7 @@ export default function LegalDocs() {
               </div>
               {preview ? (
                 <div
-                  className="p-6 min-h-[500px] overflow-auto text-sm leading-relaxed
+                  className={`p-6 min-h-[500px] overflow-auto text-sm leading-relaxed
                     [&_h2]:text-base [&_h2]:font-semibold [&_h2]:mt-10 [&_h2]:mb-3 [&_h2]:pb-2 [&_h2]:border-b [&_h2]:border-border
                     [&_h3]:text-sm [&_h3]:font-semibold [&_h3]:mt-6 [&_h3]:mb-2
                     [&_p]:mb-4 [&_p]:leading-[1.8]
@@ -278,34 +393,31 @@ export default function LegalDocs() {
                     [&_code]:bg-muted [&_code]:px-1 [&_code]:rounded [&_code]:text-xs [&_code]:font-mono
                     [&_table]:w-full [&_table]:text-sm [&_table]:my-4 [&_table]:border-collapse
                     [&_th]:font-semibold [&_th]:text-left [&_th]:py-2 [&_th]:px-3 [&_th]:bg-muted [&_th]:border [&_th]:border-border
-                    [&_td]:py-2 [&_td]:px-3 [&_td]:border [&_td]:border-border"
-                  dangerouslySetInnerHTML={{ __html: sanitizeHtml(cur.content) }}
+                    [&_td]:py-2 [&_td]:px-3 [&_td]:border [&_td]:border-border
+                    ${activeLang === 'ar' ? 'direction-rtl text-right' : ''}`}
+                  dir={activeLang === 'ar' ? 'rtl' : 'ltr'}
+                  dangerouslySetInnerHTML={{ __html: sanitizeHtml(curContent) }}
                 />
               ) : (
                 <div className="relative">
-                  {!cur.content && (
+                  {!curContent && (
                     <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 p-8 z-10">
                       <FileText className="h-10 w-10 text-muted-foreground/30 pointer-events-none" />
                       <p className="text-sm text-muted-foreground text-center pointer-events-none">
-                        No content published yet for this document.
+                        No {LANGS.find(l => l.key === activeLang)?.label} content yet.
                       </p>
                       <p className="text-xs text-muted-foreground/70 text-center max-w-xs pointer-events-none">
-                        Paste the document HTML in the textarea below. Use &lt;h2&gt;, &lt;p&gt;, &lt;ul&gt;, &lt;li&gt;, &lt;strong&gt; tags, then click <strong>Publish</strong>.
+                        Paste the {LANGS.find(l => l.key === activeLang)?.label} HTML in the textarea below, then click <strong>Publish</strong>.
                       </p>
-                      <button
-                        onClick={() => seedFromLiveApp(activeDoc)}
-                        className="mt-1 text-xs font-medium text-primary hover:underline"
-                      >
-                        View live doc ↗
-                      </button>
                     </div>
                   )}
                   <textarea
-                    value={cur.content}
-                    onChange={e => set(activeDoc, { content: e.target.value })}
-                    placeholder={`<p>Enter the ${docMeta.label} content in HTML…</p>\n\n<h2>1. Section Title</h2>\n<p>Section body text goes here.</p>`}
+                    value={curContent}
+                    onChange={e => setContent(activeDoc, activeLang, e.target.value)}
+                    placeholder={`<p>Enter the ${docMeta.label} content in HTML (${LANGS.find(l => l.key === activeLang)?.label})…</p>\n\n<h2>1. Section Title</h2>\n<p>Section body text goes here.</p>`}
                     className="w-full min-h-[500px] p-5 font-mono text-xs bg-transparent resize-none focus:outline-none text-foreground/80 leading-relaxed relative z-0"
                     spellCheck={false}
+                    dir={activeLang === 'ar' ? 'rtl' : 'ltr'}
                   />
                 </div>
               )}
@@ -330,7 +442,7 @@ export default function LegalDocs() {
                 </button>
                 <button
                   onClick={() => setShowConfirm(true)}
-                  disabled={publishing || !cur.content.trim()}
+                  disabled={publishing || !curContent.trim()}
                   className="flex items-center gap-2 px-5 py-2 rounded-lg bg-primary text-primary-foreground text-sm font-semibold hover:bg-primary/90 transition-colors disabled:opacity-40"
                 >
                   {publishing ? <Loader2 className="h-4 w-4 animate-spin" /> : <Upload className="h-4 w-4" />}
@@ -359,6 +471,24 @@ export default function LegalDocs() {
                   <span className="text-muted-foreground">Change notes</span>
                   <span className="font-medium">{cur.changes.filter(Boolean).length} bullet{cur.changes.filter(Boolean).length !== 1 ? 's' : ''}</span>
                 </div>
+                <div className="pt-2 border-t border-border">
+                  <p className="text-xs text-muted-foreground mb-2">Languages published this session</p>
+                  <div className="flex gap-2 flex-wrap">
+                    {LANGS.map(l => (
+                      <span
+                        key={l.key}
+                        className={`text-xs px-2.5 py-1 rounded-full font-medium ${
+                          cur.savedLangs.has(l.key)
+                            ? 'bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300'
+                            : 'bg-muted text-muted-foreground'
+                        }`}
+                      >
+                        {l.flag} {l.label}
+                        {cur.savedLangs.has(l.key) && ' ✓'}
+                      </span>
+                    ))}
+                  </div>
+                </div>
               </div>
             </div>
 
@@ -372,7 +502,7 @@ export default function LegalDocs() {
                 <li className="flex items-start gap-2"><span className="text-primary mt-0.5">✓</span> Content goes live on all apps instantly</li>
                 <li className="flex items-start gap-2"><span className="text-primary mt-0.5">✓</span> All users see an in-app banner on next login</li>
                 <li className="flex items-start gap-2"><span className="text-primary mt-0.5">✓</span> Company admins must re-accept before using the app</li>
-                <li className="flex items-start gap-2"><span className="text-primary mt-0.5">✓</span> Email blast sent (if SendGrid is configured)</li>
+                <li className="flex items-start gap-2"><span className="text-primary mt-0.5">✓</span> Email blast sent (if email relay is configured)</li>
                 <li className="flex items-start gap-2"><span className="text-primary mt-0.5">✓</span> Publish event logged to audit trail</li>
               </ul>
             </div>
@@ -386,7 +516,7 @@ export default function LegalDocs() {
                 <p className="text-xs text-green-700 dark:text-green-300">v{publishResult.version}</p>
                 {publishResult.emailsSent > 0
                   ? <p className="text-xs text-green-700 dark:text-green-300">{publishResult.emailsSent} email{publishResult.emailsSent !== 1 ? 's' : ''} sent</p>
-                  : <p className="text-xs text-amber-600 dark:text-amber-400">Emails skipped (SendGrid not configured)</p>
+                  : <p className="text-xs text-amber-600 dark:text-amber-400">Emails skipped (email relay not configured)</p>
                 }
               </div>
             )}
@@ -403,7 +533,9 @@ export default function LegalDocs() {
                 <AlertTriangle className="h-5 w-5 text-amber-600" />
               </div>
               <div>
-                <h3 className="font-bold text-base">Publish {docMeta.label} v{cur.version}?</h3>
+                <h3 className="font-bold text-base">
+                  Publish {docMeta.label} v{cur.version}? ({LANGS.find(l => l.key === activeLang)?.flag} {LANGS.find(l => l.key === activeLang)?.label})
+                </h3>
                 <p className="text-sm text-muted-foreground mt-1">
                   This will immediately go live on all apps. Every user will see a banner on next login,
                   and company admins will need to re-accept before accessing the platform.

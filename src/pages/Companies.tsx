@@ -4,8 +4,8 @@ import { Search, Trash2, Pencil, LogIn, X, Check, Loader2, Users, GraduationCap 
 import { toast } from 'sonner'
 
 const PLAN_COLORS: Record<string, string> = {
-  free:       'bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300',
-  pro:        'bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300',
+  starter:    'bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300',
+  pro:        'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300',
   enterprise: 'bg-violet-100 text-violet-700 dark:bg-violet-900/40 dark:text-violet-300',
 }
 
@@ -188,11 +188,11 @@ export default function Companies() {
               <div className="space-y-2">
                 <label className="text-sm font-medium">Plan</label>
                 <select
-                  value={editing.plan || 'free'}
+                  value={editing.plan || 'starter'}
                   onChange={e => setEditing({ ...editing, plan: e.target.value })}
                   className="flex h-10 w-full rounded-md border border-input bg-input-background px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                 >
-                  <option value="free">Free</option>
+                  <option value="starter">Starter</option>
                   <option value="pro">Pro</option>
                   <option value="enterprise">Enterprise</option>
                 </select>

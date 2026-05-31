@@ -1,9 +1,9 @@
 import { useEffect, useState } from 'react'
 import { adminApi } from '../lib/api'
-import { Loader2, Plus, Pencil, Check, X, Users, GraduationCap } from 'lucide-react'
+import { Loader2, Plus, Pencil, Check, X, Users, GraduationCap, FileText } from 'lucide-react'
 import { toast } from 'sonner'
 
-const PLANS_ORDER = ['free', 'pro', 'enterprise']
+const PLANS_ORDER = ['starter', 'pro', 'enterprise']
 
 export default function Subscriptions() {
   const [plans, setPlans] = useState<any>({})
@@ -41,23 +41,23 @@ export default function Subscriptions() {
     finally { setSaving(false) }
   }
 
-  const handleChangePlan = async (companyId: string, plan: string) => {
+  const handleChangePlan = async (companyId: string, planId: string) => {
     try {
-      await adminApi.updateSubscription(companyId, { plan })
+      await adminApi.updateSubscription(companyId, { planId })
       toast.success('Plan updated')
       load()
     } catch (e: any) { toast.error(e.message) }
   }
 
   const PLAN_COLORS: Record<string, string> = {
-    free:       'border-slate-200 dark:border-slate-700',
-    pro:        'border-blue-200 dark:border-blue-800',
+    starter:    'border-blue-200 dark:border-blue-800',
+    pro:        'border-emerald-200 dark:border-emerald-800',
     enterprise: 'border-violet-200 dark:border-violet-800',
   }
 
   const PLAN_BADGE: Record<string, string> = {
-    free:       'bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300',
-    pro:        'bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300',
+    starter:    'bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300',
+    pro:        'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300',
     enterprise: 'bg-violet-100 text-violet-700 dark:bg-violet-900/40 dark:text-violet-300',
   }
 
@@ -167,12 +167,16 @@ export default function Subscriptions() {
                     ) : (
                       <div className="space-y-3">
                         <p className="text-2xl font-bold">
-                          {plan.price === 0 ? 'Free' : `$${plan.price}`}
+                          {plan.price === 0 ? 'Free' : plan.price === null ? 'Custom' : `$${plan.price}`}
                           {plan.price > 0 && <span className="text-sm font-normal text-muted-foreground">/mo</span>}
+                          {plan.annualPrice && (
+                            <span className="ml-2 text-sm font-normal text-muted-foreground">(${plan.annualPrice}/mo annual)</span>
+                          )}
                         </p>
-                        <div className="flex items-center gap-3 text-sm text-muted-foreground">
-                          <span className="flex items-center gap-1"><Users className="h-3.5 w-3.5" /> {plan.maxUsers === -1 ? '∞' : plan.maxUsers ?? 0} users</span>
+                        <div className="flex items-center gap-3 text-sm text-muted-foreground flex-wrap">
+                          <span className="flex items-center gap-1"><Users className="h-3.5 w-3.5" /> {plan.maxUsers === -1 ? '∞' : plan.maxUsers ?? 0} seats</span>
                           <span className="flex items-center gap-1"><GraduationCap className="h-3.5 w-3.5" /> {plan.maxStudents === -1 ? '∞' : plan.maxStudents ?? 0} students</span>
+                          <span className="flex items-center gap-1"><FileText className="h-3.5 w-3.5" /> {plan.maxForms === -1 ? '∞' : plan.maxForms ?? 0} forms</span>
                         </div>
                         {plan.features?.length > 0 && (
                           <ul className="space-y-1 text-sm text-muted-foreground">
@@ -225,16 +229,16 @@ export default function Subscriptions() {
                       </span>
                     </td>
                     <td className="px-4 py-3">
-                      <select
-                        value={c.plan || 'free'}
-                        onChange={e => handleChangePlan(c.id, e.target.value)}
-                        className="h-8 rounded-md border border-input bg-input-background px-2 py-1 text-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                      >
-                        {PLANS_ORDER.map(p => (
-                          <option key={p} value={p} className="capitalize">{p}</option>
-                        ))}
-                      </select>
-                    </td>
+                       <select
+                         value={c.subscription?.planId || c.plan || 'starter'}
+                         onChange={e => handleChangePlan(c.id, e.target.value)}
+                         className="h-8 rounded-md border border-input bg-input-background px-2 py-1 text-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                       >
+                         <option value="starter">Starter</option>
+                         <option value="pro">Pro</option>
+                         <option value="enterprise">Enterprise</option>
+                       </select>
+                     </td>
                   </tr>
                 ))}
               </tbody>
