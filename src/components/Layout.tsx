@@ -1,5 +1,7 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '../lib/supabase'
+import { adminApi } from '../lib/api'
+
 import { type Page } from '../App'
 import {
   LayoutDashboard,
@@ -21,7 +23,9 @@ import {
   ShieldCheck,
   Scale,
   Bell,
+  MessageSquare,
 } from 'lucide-react'
+
 import { Toaster } from './ui/sonner'
 
 const gademlyLogo = '/gademly-logo.png'
@@ -33,15 +37,16 @@ interface NavItem {
 }
 
 const NAV: NavItem[] = [
-  { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
-  { id: 'companies', label: 'Companies', icon: Building2 },
-  { id: 'users', label: 'Users', icon: Users },
+  { id: 'dashboard',     label: 'Dashboard',     icon: LayoutDashboard },
+  { id: 'companies',     label: 'Companies',     icon: Building2 },
+  { id: 'users',         label: 'Users',         icon: Users },
   { id: 'subscriptions', label: 'Subscriptions', icon: CreditCard },
-  { id: 'forms', label: 'Forms', icon: FileText },
-  { id: 'audit', label: 'Audit Log', icon: ClipboardList },
+  { id: 'forms',         label: 'Forms',         icon: FileText },
+  { id: 'support',       label: 'Support',       icon: MessageSquare },
+  { id: 'audit',         label: 'Audit Log',     icon: ClipboardList },
   { id: 'notifications', label: 'Notifications', icon: Bell },
-  { id: 'legal', label: 'Legal Docs', icon: Scale },
-  { id: 'settings', label: 'Settings', icon: Settings },
+  { id: 'legal',         label: 'Legal Docs',    icon: Scale },
+  { id: 'settings',      label: 'Settings',      icon: Settings },
 ]
 
 interface LayoutProps {
@@ -49,9 +54,11 @@ interface LayoutProps {
   onNavigate: (p: Page) => void
   adminName: string
   children: React.ReactNode
+  onTicketClick?: (ticketId: string) => void
 }
 
-export default function Layout({ page, onNavigate, adminName, children }: LayoutProps) {
+
+export default function Layout({ page, onNavigate, adminName, children, onTicketClick }: LayoutProps) {
   const [mobileOpen, setMobileOpen] = useState(false)
   const [collapsed, setCollapsed] = useState(false)
   const [darkMode, setDarkMode] = useState(() => {
@@ -63,6 +70,9 @@ export default function Layout({ page, onNavigate, adminName, children }: Layout
   })
   const [userMenuOpen, setUserMenuOpen] = useState(false)
   const [time, setTime] = useState(new Date())
+  const [openTickets, setOpenTickets] = useState(0)
+  const [ticketBellOpen, setTicketBellOpen] = useState(false)
+  const [recentTickets, setRecentTickets] = useState<any[]>([])
 
   // Dark mode
   useEffect(() => {
@@ -79,6 +89,21 @@ export default function Layout({ page, onNavigate, adminName, children }: Layout
   useEffect(() => {
     const t = setInterval(() => setTime(new Date()), 1000)
     return () => clearInterval(t)
+  }, [])
+
+  // Support ticket polling — check every 60s for new open tickets
+  useEffect(() => {
+    const fetchTickets = async () => {
+      try {
+        const data = await adminApi.getSupportTickets({ status: 'open', limit: 5 })
+        const tickets = data.tickets || []
+        setOpenTickets(tickets.length)
+        setRecentTickets(tickets.slice(0, 5))
+      } catch {}
+    }
+    fetchTickets()
+    const interval = setInterval(fetchTickets, 60_000)
+    return () => clearInterval(interval)
   }, [])
 
   const handleSignOut = async () => {
@@ -112,11 +137,60 @@ export default function Layout({ page, onNavigate, adminName, children }: Layout
             </div>
           </div>
 
-          {/* Right: clock, dark mode, user */}
-          <div className="flex items-center gap-4 overflow-visible">
+          {/* Right: clock, dark mode, support bell, user */}
+          <div className="flex items-center gap-3 overflow-visible">
             {/* Clock */}
             <div className="hidden lg:block text-right">
               <p className="text-sm font-medium">{formatTime(time)}</p>
+            </div>
+
+            {/* Support ticket bell */}
+            <div className="relative">
+              <button
+                onClick={() => setTicketBellOpen(!ticketBellOpen)}
+                className="relative flex items-center justify-center h-10 w-10 rounded-xl border-transparent text-muted-foreground hover:text-foreground hover:bg-accent hover:border-border transition-all"
+                title="Support Tickets"
+              >
+                <MessageSquare className="h-[18px] w-[18px]" />
+                {openTickets > 0 && (
+                  <span className="absolute -top-1 -right-1 h-4 w-4 rounded-full bg-red-500 text-white text-[10px] font-bold flex items-center justify-center">
+                    {openTickets > 9 ? '9+' : openTickets}
+                  </span>
+                )}
+              </button>
+
+              {ticketBellOpen && (
+                <>
+                  <div className="fixed inset-0 z-40" onClick={() => setTicketBellOpen(false)} />
+                  <div className="absolute right-0 mt-2 w-80 rounded-xl border bg-popover shadow-lg z-50 overflow-hidden">
+                    <div className="px-4 py-3 border-b flex items-center justify-between">
+                      <p className="text-sm font-semibold">Open Tickets ({openTickets})</p>
+                      <button
+                        onClick={() => { onNavigate('support'); setTicketBellOpen(false) }}
+                        className="text-xs text-primary hover:underline"
+                      >View all</button>
+                    </div>
+                    <div className="max-h-72 overflow-y-auto">
+                      {recentTickets.length === 0 ? (
+                        <p className="text-sm text-muted-foreground text-center py-6">No open tickets 🎉</p>
+                      ) : recentTickets.map((t: any) => (
+                        <button
+                          key={t.id}
+                          onClick={() => {
+                            setTicketBellOpen(false)
+                            if (onTicketClick) onTicketClick(t.id)
+                            else onNavigate('support')
+                          }}
+                          className="w-full text-left px-4 py-3 hover:bg-accent transition-colors border-b last:border-0"
+                        >
+                          <p className="text-sm font-medium line-clamp-1">{t.subject}</p>
+                          <p className="text-xs text-muted-foreground">{t.userEmail || t.companyName}</p>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                </>
+              )}
             </div>
 
             {/* Dark mode */}

@@ -83,4 +83,14 @@ export const adminApi = {
   }) => req<any>('POST', '/make-server-c6b0f6c0/admin/notifications/broadcast', payload),
   sendDigest: (digestType: 'daily' | 'weekly') =>
     req<any>('POST', '/make-server-c6b0f6c0/admin/notifications/send-digest', { digestType }),
+
+  // Support tickets
+  getSupportTickets: (opts?: { status?: string; limit?: number }) =>
+    req<any>('GET', `/make-server-c6b0f6c0/admin/support/tickets${opts?.status ? `?status=${opts.status}` : ''}${opts?.limit ? `${opts?.status ? '&' : '?'}limit=${opts.limit}` : ''}`),
+  getSupportTicket: (id: string) =>
+    req<any>('GET', `/make-server-c6b0f6c0/admin/support/tickets/${id}`),
+  updateSupportTicket: (id: string, data: { status?: string; adminNote?: string }) =>
+    req<any>('PUT', `/make-server-c6b0f6c0/admin/support/tickets/${id}`, data),
+  getUnresolvedTicketCount: () =>
+    req<any>('GET', '/make-server-c6b0f6c0/admin/support/tickets/count?status=open'),
 }

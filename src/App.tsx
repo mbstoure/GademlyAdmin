@@ -11,8 +11,10 @@ import AuditLog from './pages/AuditLog'
 import Settings from './pages/Settings'
 import LegalDocs from './pages/LegalDocs'
 import Notifications from './pages/Notifications'
+import SupportTickets from './pages/SupportTickets'
 
-export type Page = 'dashboard' | 'companies' | 'users' | 'subscriptions' | 'forms' | 'audit' | 'settings' | 'legal' | 'notifications'
+export type Page = 'dashboard' | 'companies' | 'users' | 'subscriptions' | 'forms' | 'audit' | 'settings' | 'legal' | 'notifications' | 'support'
+
 
 // ── Dev bypass: set VITE_DEV_BYPASS=true in .env to skip login ──────────────
 const DEV_BYPASS = import.meta.env.VITE_DEV_BYPASS === 'true'
@@ -23,6 +25,14 @@ function App() {
   const [profile, setProfile] = useState<any>(DEV_BYPASS ? DEV_PROFILE : null)
   const [loading, setLoading] = useState(!DEV_BYPASS)
   const [page, setPage] = useState<Page>('dashboard')
+  const [highlightTicketId, setHighlightTicketId] = useState<string | null>(null)
+
+  const navigateToTicket = (ticketId: string) => {
+    setHighlightTicketId(ticketId)
+    setPage('support')
+    // Clear after a moment so re-opening same ticket works
+    setTimeout(() => setHighlightTicketId(null), 1000)
+  }
 
   useEffect(() => {
     if (DEV_BYPASS) return
@@ -86,10 +96,11 @@ function App() {
     settings:      <Settings />,
     legal:         <LegalDocs />,
     notifications: <Notifications />,
+    support:       <SupportTickets highlightId={highlightTicketId} />,
   }
 
   return (
-    <Layout page={page} onNavigate={setPage} adminName={profile.fullName || profile.email}>
+    <Layout page={page} onNavigate={setPage} adminName={profile.fullName || profile.email} onTicketClick={navigateToTicket}>
       {pages[page]}
     </Layout>
   )
