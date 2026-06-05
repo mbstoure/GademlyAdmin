@@ -6,15 +6,20 @@ import {
 } from 'lucide-react'
 import { toast } from 'sonner'
 
-function timeAgo(iso: string) {
-  const diff = Date.now() - new Date(iso).getTime()
-  const m = Math.floor(diff / 60000)
-  const h = Math.floor(diff / 3600000)
-  const d = Math.floor(diff / 86400000)
-  if (m < 2) return 'just now'
+function timeAgo(iso: string | undefined | null): string {
+  if (!iso) return '—'
+  const ms = new Date(iso).getTime()
+  if (isNaN(ms)) return '—'
+  const diff = Date.now() - ms
+  if (diff < 0) return 'just now'
+  const m = Math.floor(diff / 60_000)
+  const h = Math.floor(diff / 3_600_000)
+  const d = Math.floor(diff / 86_400_000)
+  if (m < 2)  return 'just now'
   if (m < 60) return `${m}m ago`
   if (h < 24) return `${h}h ago`
-  return `${d}d ago`
+  if (d <  7) return `${d}d ago`
+  return new Date(iso).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })
 }
 
 const PRIORITY_COLORS: Record<string, string> = {
