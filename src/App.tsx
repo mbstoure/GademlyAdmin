@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import { supabase } from './lib/supabase'
+import { recordAdminLogin, pingSession } from './lib/sessionTracker'
 import Login from './pages/Login'
 import Layout from './components/Layout'
 import Dashboard from './pages/Dashboard'
@@ -15,6 +16,12 @@ import SupportTickets from './pages/SupportTickets'
 
 export type Page = 'dashboard' | 'companies' | 'users' | 'subscriptions' | 'forms' | 'audit' | 'settings' | 'legal' | 'notifications' | 'support'
 
+const VALID_PAGES: Page[] = ['dashboard', 'companies', 'users', 'subscriptions', 'forms', 'audit', 'settings', 'legal', 'notifications', 'support']
+
+function getPageFromHash(): Page {
+  const hash = window.location.hash.replace('#', '') as Page
+  return VALID_PAGES.includes(hash) ? hash : 'dashboard'
+}
 
 // ── Dev bypass: set VITE_DEV_BYPASS=true in .env to skip login ──────────────
 const DEV_BYPASS = import.meta.env.VITE_DEV_BYPASS === 'true'
@@ -24,13 +31,25 @@ function App() {
   const [session, setSession] = useState<any>(DEV_BYPASS ? 'dev' : null)
   const [profile, setProfile] = useState<any>(DEV_BYPASS ? DEV_PROFILE : null)
   const [loading, setLoading] = useState(!DEV_BYPASS)
-  const [page, setPage] = useState<Page>('dashboard')
+  const [page, setPage] = useState<Page>(getPageFromHash)
   const [highlightTicketId, setHighlightTicketId] = useState<string | null>(null)
+
+  // Sync hash → page on back/forward navigation
+  useEffect(() => {
+    const onHashChange = () => setPage(getPageFromHash())
+    window.addEventListener('hashchange', onHashChange)
+    return () => window.removeEventListener('hashchange', onHashChange)
+  }, [])
+
+  // Navigate: update state + URL hash
+  const navigate = (p: Page) => {
+    setPage(p)
+    window.location.hash = p
+  }
 
   const navigateToTicket = (ticketId: string) => {
     setHighlightTicketId(ticketId)
-    setPage('support')
-    // Clear after a moment so re-opening same ticket works
+    navigate('support')
     setTimeout(() => setHighlightTicketId(null), 1000)
   }
 
@@ -46,7 +65,9 @@ function App() {
       if (s) fetchProfile(s.access_token)
       else { setProfile(null); setLoading(false) }
     })
-    return () => subscription.unsubscribe()
+    // Ping last_active every 5 minutes while the portal is open
+    const pingInterval = setInterval(pingSession, 5 * 60 * 1000)
+    return () => { subscription.unsubscribe(); clearInterval(pingInterval) }
   }, [])
 
   async function fetchProfile(token: string) {
@@ -64,6 +85,8 @@ function App() {
           alert('Access denied — Super Admin accounts only.')
         } else {
           setProfile(p)
+          // Record this login in the admin_sessions table
+          recordAdminLogin()
         }
       } else {
         console.error('[Admin] fetchProfile HTTP error:', res.status, await res.text().catch(() => ''))
@@ -100,7 +123,7 @@ function App() {
   }
 
   return (
-    <Layout page={page} onNavigate={setPage} adminName={profile.fullName || profile.email} onTicketClick={navigateToTicket}>
+    <Layout page={page} onNavigate={navigate} adminName={profile.fullName || profile.email} onTicketClick={navigateToTicket}>
       {pages[page]}
     </Layout>
   )

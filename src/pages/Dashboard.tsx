@@ -6,14 +6,33 @@ import {
 } from 'lucide-react'
 import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer } from 'recharts'
 
-const PIE_COLORS = ['#6366f1', '#8b5cf6', '#06b6d4']
+// ── Colour palette for plan slices ────────────────────────────────────────────
+const PLAN_COLORS = ['#6366f1', '#8b5cf6', '#06b6d4', '#10b981', '#f59e0b', '#ef4444']
+
+// Labels we want to display even when the server uses internal plan IDs
+const PLAN_LABELS: Record<string, string> = {
+  free: 'Free',
+  starter: 'Starter',
+  basic: 'Basic',
+  professional: 'Professional',
+  pro: 'Professional',
+  enterprise: 'Enterprise',
+  premium: 'Premium',
+  custom: 'Custom',
+  trial: 'Trial',
+}
+
+function prettyPlan(raw: string): string {
+  if (!raw) return 'Unknown'
+  return PLAN_LABELS[raw.toLowerCase()] ?? raw.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase())
+}
 
 function timeAgo(iso: string | undefined | null): string {
   if (!iso) return '—'
   const ms = new Date(iso).getTime()
   if (isNaN(ms)) return '—'
   const diff = Date.now() - ms
-  if (diff < 0) return 'just now'           // clock skew guard
+  if (diff < 0) return 'just now'
   const m = Math.floor(diff / 60_000)
   const h = Math.floor(diff / 3_600_000)
   const d = Math.floor(diff / 86_400_000)
@@ -31,15 +50,61 @@ function greeting() {
   return 'Good evening'
 }
 
+// ── Derive plan distribution + MRR from subscriptions array ──────────────────
+function deriveFromSubscriptions(subs: any[]): {
+  planData: { name: string; value: number }[]
+  mrr: number
+} {
+  const planCounts: Record<string, number> = {}
+  let mrr = 0
+
+  subs.forEach(s => {
+    // Only count active/trialing subscriptions
+    const isActive = !s.status || ['active', 'trialing', 'past_due'].includes(s.status)
+    if (!isActive) return
+
+    const plan = prettyPlan(s.plan || s.planId || s.tier || 'unknown')
+    planCounts[plan] = (planCounts[plan] || 0) + 1
+
+    // MRR: prefer explicit field, else derive from amount + billing interval
+    if (s.mrr) {
+      mrr += Number(s.mrr)
+    } else if (s.amount) {
+      const amount = Number(s.amount)
+      if (s.billingInterval === 'yearly' || s.interval === 'year') {
+        mrr += amount / 12
+      } else {
+        mrr += amount
+      }
+    } else if (s.planPrice) {
+      mrr += Number(s.planPrice)
+    }
+  })
+
+  const planData = Object.entries(planCounts)
+    .map(([name, value]) => ({ name, value }))
+    .sort((a, b) => b.value - a.value)
+
+  return { planData, mrr: Math.round(mrr) }
+}
+
 export default function Dashboard() {
   const [stats, setStats] = useState<any>(null)
+  const [subscriptions, setSubscriptions] = useState<any[]>([])
   const [logs, setLogs] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
   const [logsLoading, setLogsLoading] = useState(true)
 
   const load = async () => {
     setLoading(true)
-    try { setStats(await adminApi.getStats()) } catch {}
+    try {
+      const [statsRes, subsRes] = await Promise.all([
+        adminApi.getStats(),
+        adminApi.getSubscriptions().catch(() => ({ subscriptions: [] })),
+      ])
+      setStats(statsRes)
+      setSubscriptions(subsRes.subscriptions || [])
+    } catch {}
     setLoading(false)
   }
 
@@ -54,17 +119,40 @@ export default function Dashboard() {
 
   useEffect(() => { load(); loadLogs() }, [])
 
-  const planData = stats?.planDistribution
-    ? Object.entries(stats.planDistribution).map(([name, value]) => ({ name, value: Number(value) }))
-    : []
+  // ── Plan distribution ─────────────────────────────────────────────────────
+  // Priority: actual subscription records → fallback to server stats field
+  const { planData, mrr: derivedMrr } = deriveFromSubscriptions(subscriptions)
 
+  // If server gave us plan distribution, merge it (server wins on count, we label nicely)
+  const finalPlanData = planData.length > 0
+    ? planData
+    : stats?.planDistribution
+      ? Object.entries(stats.planDistribution).map(([k, v]) => ({ name: prettyPlan(k), value: Number(v) }))
+      : []
+
+  // MRR: use derived value if > 0, else fall back to server stats
+  const finalMrr = derivedMrr > 0
+    ? derivedMrr
+    : (stats?.mrr ?? 0)
+
+  // ── Stat cards ────────────────────────────────────────────────────────────
   const statCards = [
     { label: 'Companies',   value: stats?.totalCompanies,  icon: Building2,     color: 'text-blue-600' },
     { label: 'Users',       value: stats?.totalUsers,      icon: Users,         color: 'text-violet-600' },
     { label: 'Students',    value: stats?.totalStudents,   icon: GraduationCap, color: 'text-cyan-600' },
     { label: 'Forms',       value: stats?.totalForms,      icon: FileText,      color: 'text-emerald-600' },
-    { label: 'MRR',         value: stats?.mrr ? `$${stats.mrr.toLocaleString()}` : '$0', icon: DollarSign, color: 'text-amber-600' },
-    { label: 'Growth',      value: stats?.growth ? `${stats.growth}%` : '—',    icon: TrendingUp,    color: 'text-green-600' },
+    {
+      label: 'MRR',
+      value: finalMrr > 0 ? `$${finalMrr.toLocaleString()}` : '$0',
+      icon: DollarSign,
+      color: 'text-amber-600',
+    },
+    {
+      label: 'Growth',
+      value: stats?.growth ? `${stats.growth}%` : '—',
+      icon: TrendingUp,
+      color: 'text-green-600',
+    },
   ]
 
   const ACTION_COLORS: Record<string, string> = {
@@ -74,6 +162,9 @@ export default function Dashboard() {
     login:  'bg-purple-500',
     impersonate: 'bg-amber-500',
   }
+
+  // Active subscription count for context
+  const activeSubs = subscriptions.filter(s => !s.status || ['active', 'trialing'].includes(s.status)).length
 
   return (
     <div className="space-y-6">
@@ -162,42 +253,75 @@ export default function Dashboard() {
 
         {/* Plan distribution */}
         <div className="rounded-xl border bg-card text-card-foreground shadow-sm">
-          <div className="p-6 pb-3">
-            <h3 className="font-semibold">Plan Distribution</h3>
-            <p className="text-sm text-muted-foreground mt-0.5">Subscriptions by tier</p>
+          <div className="p-6 pb-3 flex items-center justify-between">
+            <div>
+              <h3 className="font-semibold">Plan Distribution</h3>
+              <p className="text-sm text-muted-foreground mt-0.5">Active subscriptions by tier</p>
+            </div>
+            {!loading && activeSubs > 0 && (
+              <span className="text-xs font-medium px-2 py-0.5 rounded-full bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300">
+                {activeSubs} active
+              </span>
+            )}
           </div>
           <div className="px-6 pb-6">
             {loading ? (
               <div className="h-40 flex items-center justify-center text-sm text-muted-foreground animate-pulse">
                 Loading...
               </div>
-            ) : planData.length === 0 ? (
-              <div className="h-40 flex items-center justify-center text-sm text-muted-foreground">
-                No data yet
+            ) : finalPlanData.length === 0 ? (
+              <div className="h-40 flex flex-col items-center justify-center text-sm text-muted-foreground gap-2">
+                <DollarSign className="h-8 w-8 opacity-30" />
+                <p>No active subscriptions yet</p>
               </div>
             ) : (
               <>
                 <ResponsiveContainer width="100%" height={160}>
                   <PieChart>
-                    <Pie data={planData} cx="50%" cy="50%" innerRadius={45} outerRadius={70} dataKey="value" paddingAngle={3}>
-                      {planData.map((_, i) => (
-                        <Cell key={i} fill={PIE_COLORS[i % PIE_COLORS.length]} />
+                    <Pie
+                      data={finalPlanData}
+                      cx="50%" cy="50%"
+                      innerRadius={45} outerRadius={70}
+                      dataKey="value"
+                      paddingAngle={3}
+                    >
+                      {finalPlanData.map((_, i) => (
+                        <Cell key={i} fill={PLAN_COLORS[i % PLAN_COLORS.length]} />
                       ))}
                     </Pie>
-                    <Tooltip formatter={(v: any) => [`${v} companies`]} />
+                    <Tooltip
+                      formatter={(v: any, name: any) => [`${v} ${v === 1 ? 'company' : 'companies'}`, name]}
+                      contentStyle={{
+                        background: 'var(--popover)',
+                        border: '1px solid var(--border)',
+                        borderRadius: '8px',
+                        fontSize: '12px',
+                      }}
+                    />
                   </PieChart>
                 </ResponsiveContainer>
                 <div className="space-y-2 mt-2">
-                  {planData.map((d, i) => (
+                  {finalPlanData.map((d, i) => (
                     <div key={d.name} className="flex items-center justify-between text-sm">
                       <div className="flex items-center gap-2">
-                        <div className="w-2 h-2 rounded-full" style={{ background: PIE_COLORS[i] }} />
+                        <div className="w-2 h-2 rounded-full flex-shrink-0" style={{ background: PLAN_COLORS[i % PLAN_COLORS.length] }} />
                         <span className="capitalize">{d.name}</span>
                       </div>
-                      <span className="font-medium text-muted-foreground">{d.value}</span>
+                      <div className="flex items-center gap-1.5">
+                        <span className="font-medium">{d.value}</span>
+                        <span className="text-muted-foreground text-xs">
+                          ({Math.round((d.value / finalPlanData.reduce((s, p) => s + p.value, 0)) * 100)}%)
+                        </span>
+                      </div>
                     </div>
                   ))}
                 </div>
+                {finalMrr > 0 && (
+                  <div className="mt-4 pt-3 border-t flex items-center justify-between text-sm">
+                    <span className="text-muted-foreground">Est. MRR</span>
+                    <span className="font-bold text-green-600 dark:text-green-400">${finalMrr.toLocaleString()}</span>
+                  </div>
+                )}
               </>
             )}
           </div>

@@ -1,7 +1,7 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import {
   FileText, Save, Upload, Eye, EyeOff, Plus, Trash2,
-  Loader2, Check, AlertTriangle, Globe, Languages, X,
+  Loader2, Check, AlertTriangle, Globe, Languages, X, History,
 } from 'lucide-react'
 import { adminApi } from '../lib/api'
 import { toast } from 'sonner'
@@ -11,6 +11,25 @@ const sanitizeHtml = (html: string) =>
   html.replace(/<script[^>]*>.*?<\/script>/gis, '')
       .replace(/on\w+="[^"]*"/gi, '')
       .replace(/on\w+='[^']*'/gi, '')
+
+// ── Version helpers ───────────────────────────────────────────────────────────
+function bumpPatch(version: string): string {
+  const parts = version.trim().split('.')
+  if (parts.length === 1) return `${version}.1`
+  const last = parseInt(parts[parts.length - 1], 10)
+  parts[parts.length - 1] = String(isNaN(last) ? 1 : last + 1)
+  return parts.join('.')
+}
+
+// ── History storage ───────────────────────────────────────────────────────────
+type HistoryEntry = { version: string; lang: string; date: string; changes: string[] }
+
+function loadHistory(docKey: string): HistoryEntry[] {
+  try { return JSON.parse(localStorage.getItem(`legal_history_${docKey}`) || '[]') } catch { return [] }
+}
+function saveHistory(docKey: string, entries: HistoryEntry[]) {
+  try { localStorage.setItem(`legal_history_${docKey}`, JSON.stringify(entries.slice(0, 30))) } catch {}
+}
 
 type DocKey  = 'tos' | 'pp' | 'dpa'
 type LangKey = 'en' | 'ar' | 'fr'
@@ -55,6 +74,7 @@ export default function LegalDocs() {
   const [activeDoc,  setActiveDoc]  = useState<DocKey>('tos')
   const [activeLang, setActiveLang] = useState<LangKey>('en')
   const [preview,    setPreview]    = useState(false)
+  const [showHistory, setShowHistory] = useState(false)
 
   const [state, setState] = useState<AllState>({
     tos: emptyDoc(),
@@ -67,8 +87,18 @@ export default function LegalDocs() {
   const [showConfirm,  setShowConfirm]  = useState(false)
   const [publishResult, setPublishResult] = useState<any>(null)
 
+  // Per-doc publish history (stored in localStorage)
+  const [history, setHistory] = useState<Record<DocKey, HistoryEntry[]>>({
+    tos: loadHistory('tos'),
+    pp:  loadHistory('pp'),
+    dpa: loadHistory('dpa'),
+  })
+
   // Reminder banner: set when user publishes only some languages
   const [reminder, setReminder] = useState<{ doc: DocKey; publishedLang: LangKey } | null>(null)
+
+  // Track which (doc+lang) combos have been fetched — prevents stale-closure re-fetching
+  const loadedRef = useRef<Set<string>>(new Set(['tos-en', 'pp-en', 'dpa-en']))
 
   // ── Fetch doc config once + content per-lang lazily ───────────────────────
   const loadDoc = async (doc: DocKey) => {
@@ -97,11 +127,11 @@ export default function LegalDocs() {
     }
   }
 
-  // Load language-specific content on tab switch (lazy)
+  // Load language-specific content on tab switch (lazy, deduplicated via ref)
   const loadLangContent = async (doc: DocKey, lang: LangKey) => {
-    if (lang === 'en') return // already loaded
-    const cur = state[doc]
-    if (cur.content[lang] !== '' || cur.loading) return // already loaded or loading
+    const key = `${doc}-${lang}`
+    if (loadedRef.current.has(key)) return // already fetched this session
+    loadedRef.current.add(key) // mark as in-progress immediately
     try {
       const res = await adminApi.getLegalContent(doc, lang)
       setState(s => ({
@@ -109,11 +139,13 @@ export default function LegalDocs() {
         [doc]: { ...s[doc], content: { ...s[doc].content, [lang]: res.content || '' } },
       }))
     } catch {
-      // ignore — content may just not exist yet
+      // Content may not exist yet — that's fine, textarea stays empty and editable
+      // Don't remove from loadedRef; we don't want to retry on every tab switch
     }
   }
 
   useEffect(() => { DOCS.forEach(d => loadDoc(d.key)) }, [])
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => { loadLangContent(activeDoc, activeLang) }, [activeDoc, activeLang])
 
   const set = (doc: DocKey, patch: Partial<Omit<DocState, 'content' | 'savedLangs'>>) =>
@@ -153,7 +185,7 @@ export default function LegalDocs() {
     setSaving(false)
   }
 
-  // Publish current doc + current lang — then show reminder for other langs
+  // Publish current doc + current lang — then bump version and clear notes
   const publish = async () => {
     setPublishing(true)
     setShowConfirm(false)
@@ -166,15 +198,31 @@ export default function LegalDocs() {
         lang:          activeLang,
       })
       setPublishResult(res)
+
+      // Save to history and clear change notes
+      const entry: HistoryEntry = {
+        version: state[activeDoc].version,
+        lang:    LANGS.find(l => l.key === activeLang)?.label || activeLang,
+        date:    new Date().toLocaleString('en-US', { month: 'short', day: 'numeric', year: 'numeric', hour: '2-digit', minute: '2-digit' }),
+        changes: state[activeDoc].changes.filter(Boolean),
+      }
+      const newHistory = [entry, ...history[activeDoc]]
+      saveHistory(activeDoc, newHistory)
+      setHistory(h => ({ ...h, [activeDoc]: newHistory }))
+
+      // Auto-bump version and clear change notes for next edit
+      const nextVersion = bumpPatch(state[activeDoc].version)
       setState(s => ({
         ...s,
         [activeDoc]: {
           ...s[activeDoc],
           dirty:      false,
+          changes:    [], // clear for next edit
+          version:    nextVersion,
           savedLangs: new Set([...s[activeDoc].savedLangs, activeLang]),
         },
       }))
-      toast.success(`Published v${state[activeDoc].version} (${LANGS.find(l => l.key === activeLang)?.label}) — users will be notified on next login`)
+      toast.success(`Published v${entry.version} (${LANGS.find(l => l.key === activeLang)?.label}) — next version will be v${nextVersion}`)
 
       // Show reminder if not all languages are published
       const missingLangs = LANGS.filter(l => l.key !== activeLang && !state[activeDoc].savedLangs.has(l.key))
@@ -190,6 +238,7 @@ export default function LegalDocs() {
   const cur     = state[activeDoc]
   const docMeta = DOCS.find(d => d.key === activeDoc)!
   const curContent = cur.content[activeLang]
+  const docHistory = history[activeDoc]
 
   const missingLangs = reminder
     ? LANGS.filter(l => l.key !== reminder.publishedLang && !state[reminder.doc].savedLangs.has(l.key))
@@ -399,27 +448,14 @@ export default function LegalDocs() {
                   dangerouslySetInnerHTML={{ __html: sanitizeHtml(curContent) }}
                 />
               ) : (
-                <div className="relative">
-                  {!curContent && (
-                    <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 p-8 z-10">
-                      <FileText className="h-10 w-10 text-muted-foreground/30 pointer-events-none" />
-                      <p className="text-sm text-muted-foreground text-center pointer-events-none">
-                        No {LANGS.find(l => l.key === activeLang)?.label} content yet.
-                      </p>
-                      <p className="text-xs text-muted-foreground/70 text-center max-w-xs pointer-events-none">
-                        Paste the {LANGS.find(l => l.key === activeLang)?.label} HTML in the textarea below, then click <strong>Publish</strong>.
-                      </p>
-                    </div>
-                  )}
-                  <textarea
-                    value={curContent}
-                    onChange={e => setContent(activeDoc, activeLang, e.target.value)}
-                    placeholder={`<p>Enter the ${docMeta.label} content in HTML (${LANGS.find(l => l.key === activeLang)?.label})…</p>\n\n<h2>1. Section Title</h2>\n<p>Section body text goes here.</p>`}
-                    className="w-full min-h-[500px] p-5 font-mono text-xs bg-transparent resize-none focus:outline-none text-foreground/80 leading-relaxed relative z-0"
-                    spellCheck={false}
-                    dir={activeLang === 'ar' ? 'rtl' : 'ltr'}
-                  />
-                </div>
+                <textarea
+                  value={curContent}
+                  onChange={e => setContent(activeDoc, activeLang, e.target.value)}
+                  placeholder={`Enter the ${docMeta.label} content in HTML (${LANGS.find(l => l.key === activeLang)?.label})…\n\nExample:\n<h2>1. Section Title</h2>\n<p>Section body text goes here.</p>`}
+                  className="w-full min-h-[500px] p-5 font-mono text-xs bg-transparent resize-none focus:outline-none text-foreground/80 leading-relaxed"
+                  spellCheck={false}
+                  dir={activeLang === 'ar' ? 'rtl' : 'ltr'}
+                />
               )}
             </div>
 
@@ -520,6 +556,35 @@ export default function LegalDocs() {
                 }
               </div>
             )}
+
+            {/* Change History */}
+            <div className="rounded-xl border bg-card overflow-hidden">
+              <button
+                onClick={() => setShowHistory(h => !h)}
+                className="w-full flex items-center justify-between px-4 py-3 text-sm font-semibold hover:bg-accent transition-colors">
+                <span className="flex items-center gap-2"><History className="h-4 w-4 text-muted-foreground" /> Publish History</span>
+                <span className="text-xs text-muted-foreground">{docHistory.length} versions</span>
+              </button>
+              {showHistory && (
+                <div className="border-t divide-y divide-border max-h-64 overflow-y-auto">
+                  {docHistory.length === 0 ? (
+                    <p className="px-4 py-3 text-xs text-muted-foreground">No publish history yet.</p>
+                  ) : docHistory.map((h, i) => (
+                    <div key={i} className="px-4 py-3 space-y-1">
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs font-mono font-bold">v{h.version}</span>
+                        <span className="text-xs text-muted-foreground">{h.lang} · {h.date}</span>
+                      </div>
+                      {h.changes.length > 0 && (
+                        <ul className="text-xs text-muted-foreground space-y-0.5">
+                          {h.changes.map((c, ci) => <li key={ci}>• {c}</li>)}
+                        </ul>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
           </div>
         </div>
       )}

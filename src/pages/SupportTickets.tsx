@@ -6,7 +6,7 @@ import {
   MessageSquare, Search, RefreshCw, ChevronRight,
   AlertTriangle, AlertCircle, Info, Zap, CheckCircle2,
   Clock, User, Building2, Tag, Image as ImageIcon,
-  X, Send, Loader2, Mail,
+  X, Send, Loader2, Mail, MessageSquarePlus,
 } from 'lucide-react'
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -25,7 +25,9 @@ interface SupportTicket {
   imageUrls?: string[]
   createdAt: string
   updatedAt: string
+  companyId?: string
   companyName?: string
+  userId?: string
   userEmail?: string
   userFullName?: string
   adminNote?: string
@@ -70,6 +72,8 @@ function TicketDetail({
 }) {
   const [note, setNote] = useState(ticket.adminNote || '')
   const [saving, setSaving] = useState(false)
+  const [reply, setReply] = useState('')
+  const [sendingReply, setSendingReply] = useState(false)
   const PIcon = PRIORITY_META[ticket.priority]?.icon || Info
 
   const saveNote = async () => {
@@ -78,6 +82,30 @@ function TicketDetail({
       await adminApi.updateSupportTicket(ticket.id, { adminNote: note })
     } catch {}
     setSaving(false)
+  }
+
+  const sendReply = async () => {
+    if (!reply.trim()) return
+    setSendingReply(true)
+    try {
+      // Send reply via API (creates in-app notification to user)
+      await adminApi.replyToTicket(ticket.id, reply.trim())
+      // Also broadcast as notification so it shows in user's bell
+      await adminApi.broadcast({
+        title: `Re: ${ticket.subject}`,
+        body: reply.trim(),
+        link: `/support`,
+        priority: 'normal',
+        ...(ticket.userId ? { targetUserId: ticket.userId } : {}),
+        ...(ticket.companyId ? { targetCompanyId: ticket.companyId } : {}),
+      }).catch(() => {})
+      setReply('')
+    } catch (e: any) {
+      // Show toast if available, else console
+      console.error('Reply failed:', e)
+    } finally {
+      setSendingReply(false)
+    }
   }
 
   return (
@@ -157,9 +185,35 @@ function TicketDetail({
                 </button>
               ))}
             </div>
+            {ticket.status !== 'resolved' && (
+              <p className="text-xs text-muted-foreground">Changing status to "Resolved" will automatically notify the user.</p>
+            )}
           </div>
 
-          {/* Admin note */}
+          {/* Reply to user */}
+          <div className="space-y-2">
+            <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide flex items-center gap-1">
+              <MessageSquarePlus className="h-3.5 w-3.5" /> Reply to User
+            </p>
+            <div className="rounded-xl border border-border overflow-hidden">
+              <textarea
+                value={reply}
+                onChange={e => setReply(e.target.value)}
+                rows={3}
+                placeholder="Type a message to send to the user as an in-app notification…"
+                className="w-full bg-transparent px-3 py-2 text-sm outline-none resize-none"
+              />
+              <div className="flex justify-end px-3 py-2 border-t bg-muted/20">
+                <Button size="sm" onClick={sendReply} disabled={sendingReply || !reply.trim()} className="gap-1.5">
+                  {sendingReply ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Send className="h-3.5 w-3.5" />}
+                  Send to User
+                </Button>
+              </div>
+            </div>
+            <p className="text-xs text-muted-foreground">This will appear in the user's notification bell.</p>
+          </div>
+
+          {/* Internal note */}
           <div className="space-y-2">
             <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Internal Note</p>
             <textarea
@@ -218,6 +272,20 @@ export default function SupportTickets({ highlightId }: SupportTicketsProps) {
       await adminApi.updateSupportTicket(id, { status })
       setTickets(prev => prev.map(t => t.id === id ? { ...t, status } : t))
       if (selected?.id === id) setSelected(prev => prev ? { ...prev, status } : prev)
+
+      // Auto-notify user when ticket is resolved
+      if (status === 'resolved') {
+        const ticket = tickets.find(t => t.id === id)
+        if (ticket) {
+          await adminApi.broadcast({
+            title: `Ticket #${ticket.ticketNumber || ticket.id.slice(0, 8).toUpperCase()} Resolved`,
+            body: `Your support request "${ticket.subject}" has been resolved. Thank you for reaching out!`,
+            link: `/support`,
+            priority: 'normal',
+            ...(ticket.companyId ? { targetCompanyId: ticket.companyId } : {}),
+          }).catch(() => {}) // Don't block on notification failure
+        }
+      }
     } catch {}
   }
 

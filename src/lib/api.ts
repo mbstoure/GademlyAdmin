@@ -39,11 +39,15 @@ export const adminApi = {
   getUsers: () => req<any>('GET', '/make-server-c6b0f6c0/admin/users'),
   updateUser: (id: string, data: unknown) => req<any>('PUT', `/make-server-c6b0f6c0/admin/users/${id}`, data),
   deleteUser: (id: string) => req<any>('DELETE', `/make-server-c6b0f6c0/admin/users/${id}`),
+  approveUser: (id: string) => req<any>('POST', `/make-server-c6b0f6c0/admin/users/${id}/approve`),
+  suspendUser: (id: string, suspended: boolean) => req<any>('PUT', `/make-server-c6b0f6c0/admin/users/${id}`, { suspended }),
 
   // Companies
   getCompanies: () => req<any>('GET', '/make-server-c6b0f6c0/admin/companies'),
   updateCompany: (id: string, data: unknown) => req<any>('PUT', `/make-server-c6b0f6c0/admin/companies/${id}`, data),
   deleteCompany: (id: string) => req<any>('DELETE', `/make-server-c6b0f6c0/admin/companies/${id}`),
+  approveCompany: (id: string) => req<any>('POST', `/make-server-c6b0f6c0/admin/companies/${id}/approve`),
+  suspendCompany: (id: string, suspended: boolean) => req<any>('PUT', `/make-server-c6b0f6c0/admin/companies/${id}`, { suspended }),
 
   // Subscriptions
   getSubscriptions: () => req<any>('GET', '/make-server-c6b0f6c0/admin/subscriptions'),
@@ -52,14 +56,31 @@ export const adminApi = {
 
   // Forms
   getForms: () => req<any>('GET', '/make-server-c6b0f6c0/admin/forms'),
+  getForm: (formId: string) => req<any>('GET', `/make-server-c6b0f6c0/admin/forms/${formId}`),
+  updateForm: (formId: string, data: unknown) => req<any>('PUT', `/make-server-c6b0f6c0/admin/forms/${formId}`, data),
   deleteForm: (formId: string) => req<any>('DELETE', `/make-server-c6b0f6c0/admin/forms/${formId}`),
 
   // Audit log
-  getAuditLog: (opts?: { limit?: number }) => req<any>('GET', `/make-server-c6b0f6c0/admin/audit-log${opts?.limit ? `?limit=${opts.limit}` : ''}`),
+  getAuditLog: (opts?: { limit?: number; offset?: number; action?: string; company?: string; from?: string; to?: string; search?: string }) => {
+    const params = new URLSearchParams()
+    if (opts?.limit)   params.set('limit',   String(opts.limit))
+    if (opts?.offset)  params.set('offset',  String(opts.offset))
+    if (opts?.action)  params.set('action',  opts.action)
+    if (opts?.company) params.set('company', opts.company)
+    if (opts?.from)    params.set('from',    opts.from)
+    if (opts?.to)      params.set('to',      opts.to)
+    if (opts?.search)  params.set('search',  opts.search)
+    const qs = params.toString()
+    return req<any>('GET', `/make-server-c6b0f6c0/admin/audit-log${qs ? `?${qs}` : ''}`)
+  },
 
   // Settings
   getSettings: () => req<any>('GET', '/make-server-c6b0f6c0/admin/settings'),
   updateSettings: (data: unknown) => req<any>('PUT', '/make-server-c6b0f6c0/admin/settings', data),
+
+  // Sessions
+  getSessions: () => req<any>('GET', '/make-server-c6b0f6c0/admin/sessions'),
+  revokeSession: (sessionId: string) => req<any>('DELETE', `/make-server-c6b0f6c0/admin/sessions/${sessionId}`),
 
   // Legal CMS
   getLegalConfig: () => req<any>('GET', '/make-server-c6b0f6c0/legal/config'),
@@ -80,6 +101,7 @@ export const adminApi = {
     link?: string;
     priority?: string;
     targetCompanyId?: string;
+    targetUserId?: string;
   }) => req<any>('POST', '/make-server-c6b0f6c0/admin/notifications/broadcast', payload),
   sendDigest: (digestType: 'daily' | 'weekly') =>
     req<any>('POST', '/make-server-c6b0f6c0/admin/notifications/send-digest', { digestType }),
@@ -91,6 +113,8 @@ export const adminApi = {
     req<any>('GET', `/make-server-c6b0f6c0/admin/support/tickets/${id}`),
   updateSupportTicket: (id: string, data: { status?: string; adminNote?: string }) =>
     req<any>('PUT', `/make-server-c6b0f6c0/admin/support/tickets/${id}`, data),
+  replyToTicket: (id: string, message: string) =>
+    req<any>('POST', `/make-server-c6b0f6c0/admin/support/tickets/${id}/reply`, { message }),
   getUnresolvedTicketCount: () =>
     req<any>('GET', '/make-server-c6b0f6c0/admin/support/tickets/count?status=open'),
 }
