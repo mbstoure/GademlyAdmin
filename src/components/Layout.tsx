@@ -37,16 +37,16 @@ interface NavItem {
 }
 
 const NAV: NavItem[] = [
-  { id: 'dashboard',     label: 'Dashboard',     icon: LayoutDashboard },
-  { id: 'companies',     label: 'Companies',     icon: Building2 },
-  { id: 'users',         label: 'Users',         icon: Users },
+  { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
+  { id: 'companies', label: 'Companies', icon: Building2 },
+  { id: 'users', label: 'Users', icon: Users },
   { id: 'subscriptions', label: 'Subscriptions', icon: CreditCard },
-  { id: 'forms',         label: 'Forms',         icon: FileText },
-  { id: 'support',       label: 'Support',       icon: MessageSquare },
-  { id: 'audit',         label: 'Audit Log',     icon: ClipboardList },
+  { id: 'forms', label: 'Forms', icon: FileText },
+  { id: 'support', label: 'Support', icon: MessageSquare },
+  { id: 'audit', label: 'Audit Log', icon: ClipboardList },
   { id: 'notifications', label: 'Notifications', icon: Bell },
-  { id: 'legal',         label: 'Legal Docs',    icon: Scale },
-  { id: 'settings',      label: 'Settings',      icon: Settings },
+  { id: 'legal', label: 'Legal Docs', icon: Scale },
+  { id: 'settings', label: 'Settings', icon: Settings },
 ]
 
 interface LayoutProps {
@@ -91,6 +91,18 @@ export default function Layout({ page, onNavigate, adminName, children, onTicket
     return () => clearInterval(t)
   }, [])
 
+  // Update browser tab title per section: Dashboard → "Admin GDM"; others → "Section - Admin GDM"
+  useEffect(() => {
+    if (page === 'dashboard') {
+      document.title = 'Admin GDM'
+    } else {
+      const navItem = NAV.find(n => n.id === page)
+      const label = navItem ? navItem.label : page
+      document.title = `${label} - Admin GDM`
+    }
+  }, [page])
+
+
   // Support ticket polling — check every 60s for new open tickets
   useEffect(() => {
     const fetchTickets = async () => {
@@ -99,7 +111,7 @@ export default function Layout({ page, onNavigate, adminName, children, onTicket
         const tickets = data.tickets || []
         setOpenTickets(tickets.length)
         setRecentTickets(tickets.slice(0, 5))
-      } catch {}
+      } catch { }
     }
     fetchTickets()
     const interval = setInterval(fetchTickets, 60_000)

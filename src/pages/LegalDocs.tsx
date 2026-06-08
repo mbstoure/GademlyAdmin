@@ -42,9 +42,10 @@ const DOCS: { key: DocKey; label: string; icon: string }[] = [
 
 const LANGS: { key: LangKey; flag: string; label: string }[] = [
   { key: 'en', flag: '🇬🇧', label: 'English' },
-  { key: 'ar', flag: '🇸🇦', label: 'Arabic'  },
   { key: 'fr', flag: '🇫🇷', label: 'French'  },
+  { key: 'ar', flag: '🇸🇦', label: 'Arabic'  },
 ]
+
 
 type DocState = {
   version:       string
