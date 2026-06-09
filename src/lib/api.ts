@@ -61,6 +61,11 @@ export const adminApi = {
   approveCompany: (id: string) => req<any>('POST', `/make-server-c6b0f6c0/admin/companies/${id}/approve`),
   suspendCompany: (id: string, suspended: boolean) => req<any>('PUT', `/make-server-c6b0f6c0/admin/companies/${id}`, { suspended }),
 
+  // Registrations (approval gate)
+  getRegistrations: () => req<any>('GET', '/make-server-c6b0f6c0/admin/registrations'),
+  approveRegistration: (id: string) => req<any>('POST', `/make-server-c6b0f6c0/admin/registrations/${id}/approve`),
+  rejectRegistration: (id: string) => req<any>('POST', `/make-server-c6b0f6c0/admin/registrations/${id}/reject`),
+
   // Subscriptions
   getSubscriptions: () => req<any>('GET', '/make-server-c6b0f6c0/admin/subscriptions'),
   updateSubscription: (companyId: string, data: unknown) => req<any>('PUT', `/make-server-c6b0f6c0/admin/subscriptions/${companyId}`, data),

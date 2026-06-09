@@ -10,6 +10,7 @@ import {
   CreditCard,
   FileText,
   ClipboardList,
+  ClipboardCheck,
   Settings,
   LogOut,
   Menu,
@@ -38,6 +39,7 @@ interface NavItem {
 
 const NAV: NavItem[] = [
   { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
+  { id: 'registrations', label: 'Registrations', icon: ClipboardCheck },
   { id: 'companies', label: 'Companies', icon: Building2 },
   { id: 'users', label: 'Users', icon: Users },
   { id: 'subscriptions', label: 'Subscriptions', icon: CreditCard },
@@ -73,6 +75,7 @@ export default function Layout({ page, onNavigate, adminName, children, onTicket
   const [openTickets, setOpenTickets] = useState(0)
   const [ticketBellOpen, setTicketBellOpen] = useState(false)
   const [recentTickets, setRecentTickets] = useState<any[]>([])
+  const [pendingRegistrations, setPendingRegistrations] = useState(0)
 
   // Dark mode
   useEffect(() => {
@@ -115,6 +118,19 @@ export default function Layout({ page, onNavigate, adminName, children, onTicket
     }
     fetchTickets()
     const interval = setInterval(fetchTickets, 60_000)
+    return () => clearInterval(interval)
+  }, [])
+
+  // Pending registrations badge — poll every 30s
+  useEffect(() => {
+    const fetchPending = async () => {
+      try {
+        const data = await adminApi.getRegistrations()
+        setPendingRegistrations((data.pending || []).length)
+      } catch { }
+    }
+    fetchPending()
+    const interval = setInterval(fetchPending, 30_000)
     return () => clearInterval(interval)
   }, [])
 
@@ -286,6 +302,7 @@ export default function Layout({ page, onNavigate, adminName, children, onTicket
               {NAV.map(item => {
                 const Icon = item.icon
                 const isActive = page === item.id
+                const badge = item.id === 'registrations' && pendingRegistrations > 0 ? pendingRegistrations : 0
                 return (
                   <button
                     key={item.id}
@@ -303,11 +320,16 @@ export default function Layout({ page, onNavigate, adminName, children, onTicket
                   >
                     <Icon className="h-5 w-5 flex-shrink-0" />
                     <span className={collapsed ? 'md:hidden' : ''}>{item.label}</span>
+                    {badge > 0 && (
+                      <span className={`ml-auto bg-red-500 text-white text-[10px] font-bold rounded-full px-1.5 py-0.5 min-w-[18px] text-center ${collapsed ? 'md:hidden' : ''}`}>
+                        {badge > 99 ? '99+' : badge}
+                      </span>
+                    )}
 
                     {/* Tooltip for collapsed */}
                     {collapsed && (
                       <span className="hidden md:block absolute left-full ml-2 px-2 py-1 bg-popover text-popover-foreground text-xs rounded-md shadow-md opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap pointer-events-none z-50">
-                        {item.label}
+                        {item.label}{badge > 0 ? ` (${badge})` : ''}
                       </span>
                     )}
                   </button>

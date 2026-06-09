@@ -13,10 +13,11 @@ import Settings from './pages/Settings'
 import LegalDocs from './pages/LegalDocs'
 import Notifications from './pages/Notifications'
 import SupportTickets from './pages/SupportTickets'
+import Registrations from './pages/Registrations'
 
-export type Page = 'dashboard' | 'companies' | 'users' | 'subscriptions' | 'forms' | 'audit' | 'settings' | 'legal' | 'notifications' | 'support'
+export type Page = 'dashboard' | 'registrations' | 'companies' | 'users' | 'subscriptions' | 'forms' | 'audit' | 'settings' | 'legal' | 'notifications' | 'support'
 
-const VALID_PAGES: Page[] = ['dashboard', 'companies', 'users', 'subscriptions', 'forms', 'audit', 'settings', 'legal', 'notifications', 'support']
+const VALID_PAGES: Page[] = ['dashboard', 'registrations', 'companies', 'users', 'subscriptions', 'forms', 'audit', 'settings', 'legal', 'notifications', 'support']
 
 function getPageFromHash(): Page {
   const hash = window.location.hash.replace('#', '') as Page
@@ -113,6 +114,7 @@ function App() {
 
   const pages: Record<Page, React.ReactElement> = {
     dashboard:     <Dashboard />,
+    registrations: <Registrations key={`regs-${navKey}`} />,
     companies:     <Companies key={`companies-${navKey}`} />,
     users:         <Users key={`users-${navKey}`} />,
     subscriptions: <Subscriptions />,
