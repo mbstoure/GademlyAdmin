@@ -104,13 +104,22 @@
 
 @layer base {
   * { @apply border-border outline-ring/50; box-sizing: border-box; }
+  html {
+    font-size: var(--font-size);
+    overflow-x: hidden;
+    /* Cross-browser text size adjustment */
+    -webkit-text-size-adjust: 100%;
+    text-size-adjust: 100%;
+  }
   body {
     @apply bg-background text-foreground;
     font-family: 'Inter', system-ui, sans-serif;
     -webkit-font-smoothing: antialiased;
     overflow-x: hidden;
+    /* Cross-browser user-select support */
+    -webkit-user-select: none;
+    user-select: none;
   }
-  html { font-size: var(--font-size); overflow-x: hidden; }
   h1 { font-size: 1.5rem; font-weight: 500; line-height: 1.5; }
   h2 { font-size: 1.25rem; font-weight: 500; line-height: 1.5; }
   h3 { font-size: 1.125rem; font-weight: 500; line-height: 1.5; }
