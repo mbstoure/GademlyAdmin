@@ -32,6 +32,7 @@ function App() {
   const [profile, setProfile] = useState<any>(DEV_BYPASS ? DEV_PROFILE : null)
   const [loading, setLoading] = useState(!DEV_BYPASS)
   const [page, setPage] = useState<Page>(getPageFromHash)
+  const [navKey, setNavKey] = useState(0)
   const [highlightTicketId, setHighlightTicketId] = useState<string | null>(null)
 
   // Sync hash → page on back/forward navigation
@@ -44,6 +45,7 @@ function App() {
   // Navigate: update state + URL hash
   const navigate = (p: Page) => {
     setPage(p)
+    setNavKey(k => k + 1)  // force remount of data-driven pages on every navigation
     window.location.hash = p
   }
 
@@ -111,8 +113,8 @@ function App() {
 
   const pages: Record<Page, React.ReactElement> = {
     dashboard:     <Dashboard />,
-    companies:     <Companies />,
-    users:         <Users />,
+    companies:     <Companies key={`companies-${navKey}`} />,
+    users:         <Users key={`users-${navKey}`} />,
     subscriptions: <Subscriptions />,
     forms:         <Forms />,
     audit:         <AuditLog />,

@@ -4,14 +4,19 @@ const BASE = import.meta.env.VITE_API_URL as string
 const DEV_BYPASS = import.meta.env.VITE_DEV_BYPASS === 'true'
 const ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY as string
 
-async function getToken(): Promise<string | null> {
-  if (DEV_BYPASS) return ANON_KEY  // use anon key so requests reach the function
+async function getToken(forceRefresh = false): Promise<string | null> {
+  if (DEV_BYPASS) return ANON_KEY
+  if (forceRefresh) {
+    // Only called after a 401 — try to get a fresh token
+    const { data } = await supabase.auth.refreshSession()
+    return data.session?.access_token ?? null
+  }
   const { data } = await supabase.auth.getSession()
   return data.session?.access_token ?? null
 }
 
-async function req<T = unknown>(method: string, path: string, body?: unknown): Promise<T> {
-  const token = await getToken()
+async function req<T = unknown>(method: string, path: string, body?: unknown, isRetry = false): Promise<T> {
+  const token = await getToken(isRetry)
   const res = await fetch(`${BASE}${path}`, {
     method,
     headers: {
@@ -20,12 +25,19 @@ async function req<T = unknown>(method: string, path: string, body?: unknown): P
     },
     ...(body ? { body: JSON.stringify(body) } : {}),
   })
+  // On 401, attempt a single token refresh and retry
+  if (res.status === 401 && !isRetry) {
+    console.warn('[Admin API] 401 received — refreshing session and retrying...')
+    return req<T>(method, path, body, true)
+  }
   if (!res.ok) {
     const err = await res.json().catch(() => ({ error: res.statusText }))
     throw new Error(err.error || 'Request failed')
   }
   return res.json()
 }
+
+
 
 // ── Stats ─────────────────────────────────────────────────────────────────
 export const adminApi = {

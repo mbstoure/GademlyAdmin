@@ -19,6 +19,7 @@ const STATUS_COLORS: Record<string, string> = {
   suspended:        'bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300',
   invited:          'bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300',
   pending_approval: 'bg-orange-100 text-orange-700 dark:bg-orange-900/40 dark:text-orange-300',
+  orphaned:         'bg-slate-100 text-slate-500 dark:bg-slate-800 dark:text-slate-400',
 }
 
 function fmt(iso?: string | null) {
@@ -152,7 +153,8 @@ export default function Users() {
 
   useEffect(() => { load() }, [])
 
-  // All unique companies derived from both users and from companyId/companyName pairing
+  // All unique companies derived from both users and from companyId/companyName pairing.
+  // Also tracks which companyIds are present so we can detect orphaned users.
   const companyNameMap = useMemo(() => {
     const map = new Map<string, string>()
     users.forEach(u => {
@@ -161,22 +163,31 @@ export default function Users() {
     return map
   }, [users])
 
+  // Set of companyIds that still exist (have at least one user with a companyName).
+  // Users with a companyId NOT in this set belong to a deleted company.
+  const existingCompanyIds = useMemo(() => new Set(companyNameMap.keys()), [companyNameMap])
+
   const companies = useMemo(() => {
     return Array.from(companyNameMap.entries())
       .map(([id, name]) => ({ id, name }))
       .sort((a, b) => a.name.localeCompare(b.name))
   }, [companyNameMap])
 
-  // Separate real users from invited-only ghost records
-  // A ghost = has a companyId but no email AND no fullName (incomplete signup)
+  // Separate real users from invited-only ghost records.
+  // A ghost = has a companyId but no email AND no fullName (incomplete signup).
+  // Also exclude ghosts whose invite email matches a real joined user (they already signed up).
   const { realUsers, ghostUsers } = useMemo(() => {
     const real: any[] = [], ghost: any[] = []
+    const joinedEmails = new Set<string>()
+    users.forEach(u => { if (u.email) joinedEmails.add(u.email.toLowerCase()) })
     users.forEach(u => {
       const isGhost = !u.email && !u.fullName
       if (isGhost) ghost.push(u)
       else real.push(u)
     })
-    return { realUsers: real, ghostUsers: ghost }
+    // Filter ghosts: exclude any whose invite email is already a joined user
+    const cleanGhosts = ghost.filter(g => !g.inviteEmail || !joinedEmails.has(g.inviteEmail.toLowerCase()))
+    return { realUsers: real, ghostUsers: cleanGhosts }
   }, [users])
 
   const filtered = useMemo(() => realUsers.filter(u => {
@@ -189,6 +200,12 @@ export default function Users() {
     const matchC = companyFilter === 'all' || u.companyId === companyFilter
     return matchQ && matchR && matchS && matchC
   }), [realUsers, search, roleFilter, statusFilter, companyFilter, companyNameMap])
+
+  // Count orphaned users (have a companyId but their company no longer exists)
+  const orphanedCount = useMemo(
+    () => realUsers.filter(u => u.companyId && !existingCompanyIds.has(u.companyId)).length,
+    [realUsers, existingCompanyIds]
+  )
 
   // Grouped by company — resolve name from companyNameMap when companyName is missing
   const grouped = useMemo(() => {
@@ -233,7 +250,8 @@ export default function Users() {
   }
 
   const handleDelete = async (u: any) => {
-    if (!confirm(`Delete user ${u.email}? This cannot be undone.`)) return
+    const label = u.email || u.fullName || 'this user'
+    if (!confirm(`Delete ${label}? This cannot be undone.`)) return
     setBusy(u.id)
     setSelected(null)
     try {
@@ -264,24 +282,32 @@ export default function Users() {
   // ── Row render ───────────────────────────────────────────────────────────────
   const UserRow = ({ u }: { u: any }) => {
     const effectiveStatus = u.suspended ? 'suspended' : u.status
+    const isOrphaned = u.companyId && !existingCompanyIds.has(u.companyId)
     return (
       <tr onClick={() => setSelected(u)} className="hover:bg-accent/30 transition-colors cursor-pointer">
         <td className="px-4 py-3">
           <div className="flex items-center gap-2">
             <span className="font-medium">{u.fullName || '—'}</span>
             {u.status === 'pending_approval' && <AlertCircle className="h-3.5 w-3.5 text-amber-500" />}
+            {isOrphaned && <AlertCircle className="h-3.5 w-3.5 text-slate-400" title="Company was deleted" />}
           </div>
         </td>
         <td className="px-4 py-3 text-muted-foreground hidden md:table-cell text-sm">{u.email}</td>
-        <td className="px-4 py-3 text-muted-foreground hidden lg:table-cell text-sm">{u.companyName || '—'}</td>
+        <td className="px-4 py-3 text-muted-foreground hidden lg:table-cell text-sm">
+          {isOrphaned
+            ? <span className="text-xs text-slate-400 italic">Company deleted</span>
+            : (u.companyName || '—')}
+        </td>
         <td className="px-4 py-3">
           <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium capitalize ${ROLE_COLORS[u.role] || ROLE_COLORS.agent}`}>
             {u.role?.replace(/_/g, ' ') || 'agent'}
           </span>
         </td>
         <td className="px-4 py-3 hidden lg:table-cell">
-          <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium capitalize ${STATUS_COLORS[effectiveStatus] || STATUS_COLORS.active}`}>
-            {effectiveStatus?.replace(/_/g, ' ') || 'active'}
+          <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium capitalize ${
+            isOrphaned ? STATUS_COLORS.orphaned : (STATUS_COLORS[effectiveStatus] || STATUS_COLORS.active)
+          }`}>
+            {isOrphaned ? 'orphaned' : (effectiveStatus?.replace(/_/g, ' ') || 'active')}
           </span>
         </td>
       </tr>
@@ -297,6 +323,11 @@ export default function Users() {
             All users across the platform.
             {pendingCount > 0 && (
               <span className="ml-2 text-amber-600 font-medium">{pendingCount} awaiting approval</span>
+            )}
+            {orphanedCount > 0 && (
+              <span className="ml-2 text-slate-500 font-medium">
+                · {orphanedCount} orphaned (company deleted — can still be deleted)
+              </span>
             )}
           </p>
         </div>
