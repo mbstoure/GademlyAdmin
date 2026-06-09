@@ -174,8 +174,8 @@ export default function LegalDocs() {
         adminApi.saveLegalContent(activeDoc, state[activeDoc].content[activeLang], activeLang),
         adminApi.updateLegalConfig(activeDoc, {
           version:       state[activeDoc].version,
-          effectiveDate: state[activeDoc].effectiveDate,
           changes:       state[activeDoc].changes,
+          // effectiveDate is auto-stamped server-side at save time
         }),
       ])
       setState(s => ({ ...s, [activeDoc]: { ...s[activeDoc], dirty: false } }))
@@ -192,11 +192,11 @@ export default function LegalDocs() {
     setShowConfirm(false)
     try {
       const res = await adminApi.publishLegal(activeDoc, {
-        version:       state[activeDoc].version,
-        effectiveDate: state[activeDoc].effectiveDate,
-        changes:       state[activeDoc].changes,
-        content:       state[activeDoc].content[activeLang],
-        lang:          activeLang,
+        version:  state[activeDoc].version,
+        changes:  state[activeDoc].changes,
+        content:  state[activeDoc].content[activeLang],
+        lang:     activeLang,
+        // effectiveDate is auto-stamped server-side at publish time
       })
       setPublishResult(res)
 
@@ -366,12 +366,14 @@ export default function LegalDocs() {
                 <label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground flex items-center gap-1.5">
                   <Globe className="h-3.5 w-3.5" /> Effective Date
                 </label>
-                <input
-                  value={cur.effectiveDate}
-                  onChange={e => set(activeDoc, { effectiveDate: e.target.value })}
-                  placeholder="e.g. June 1, 2026"
-                  className="w-full text-sm bg-transparent border-b border-border focus:outline-none focus:border-primary pb-1"
-                />
+                <div className="flex items-center gap-2 pt-1">
+                  {cur.effectiveDate ? (
+                    <span className="text-sm font-medium">{cur.effectiveDate}</span>
+                  ) : (
+                    <span className="text-xs text-muted-foreground italic">Auto-set at publish time</span>
+                  )}
+                </div>
+                <p className="text-[10px] text-muted-foreground">Automatically stamped to today's date when you publish or save draft.</p>
               </div>
             </div>
 

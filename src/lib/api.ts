@@ -104,9 +104,9 @@ export const adminApi = {
   getLegalContent: (doc: string, lang = 'en') => req<any>('GET', `/make-server-c6b0f6c0/legal/content/${doc}?lang=${lang}`),
   saveLegalContent: (doc: string, content: string, lang = 'en') =>
     req<any>('PUT', `/make-server-c6b0f6c0/legal/content/${doc}`, { content, lang }),
-  updateLegalConfig: (doc: string, meta: { version: string; effectiveDate: string; changes: string[] }) =>
+  updateLegalConfig: (doc: string, meta: { version: string; changes: string[] }) =>
     req<any>('PUT', '/make-server-c6b0f6c0/legal/config', { doc, ...meta }),
-  publishLegal: (doc: string, payload: { version: string; effectiveDate: string; changes: string[]; content: string; lang?: string }) =>
+  publishLegal: (doc: string, payload: { version: string; changes: string[]; content: string; lang?: string }) =>
     req<any>('POST', '/make-server-c6b0f6c0/legal/publish', { doc, ...payload }),
 
   // Notifications

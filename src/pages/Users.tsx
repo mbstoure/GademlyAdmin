@@ -289,7 +289,7 @@ export default function Users() {
           <div className="flex items-center gap-2">
             <span className="font-medium">{u.fullName || '—'}</span>
             {u.status === 'pending_approval' && <AlertCircle className="h-3.5 w-3.5 text-amber-500" />}
-            {isOrphaned && <AlertCircle className="h-3.5 w-3.5 text-slate-400" title="Company was deleted" />}
+            {isOrphaned && <span title="Company was deleted"><AlertCircle className="h-3.5 w-3.5 text-slate-400" /></span>}
           </div>
         </td>
         <td className="px-4 py-3 text-muted-foreground hidden md:table-cell text-sm">{u.email}</td>
