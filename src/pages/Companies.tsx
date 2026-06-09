@@ -3,7 +3,7 @@ import { adminApi } from '../lib/api'
 import {
   Search, Trash2, LogIn, X, Check, Loader2, Users, GraduationCap,
   Building2, Calendar, Mail, ShieldCheck, ShieldOff, Clock,
-  ChevronDown, AlertCircle, CheckCircle2, Ban,
+  AlertCircle, CheckCircle2, Ban,
 } from 'lucide-react'
 import { toast } from 'sonner'
 
@@ -226,7 +226,6 @@ export default function Companies() {
   const [search, setSearch] = useState('')
   const [selected, setSelected] = useState<any>(null)
   const [tab, setTab] = useState<'all' | 'pending'>('all')
-  const [impersonating, setImpersonating] = useState<string | null>(null)
 
   const load = async () => {
     setLoading(true)
@@ -261,13 +260,11 @@ export default function Companies() {
   }
 
   const handleImpersonate = async (companyId: string) => {
-    setImpersonating(companyId)
     try {
       const res = await adminApi.impersonate(companyId)
       if (res.url) window.open(res.url, '_blank')
       else toast.error('Could not generate impersonation link')
     } catch (e: any) { toast.error(e.message) }
-    setImpersonating(null)
   }
 
   const handleSuspend = async (c: any) => {
@@ -360,8 +357,8 @@ export default function Companies() {
                   <td className="px-4 py-3">
                     <div className="flex items-center gap-2">
                       <span className="font-medium">{c.name}</span>
-                      {c.suspended && <Ban className="h-3.5 w-3.5 text-red-500" title="Suspended" />}
-                      {c.status === 'pending_approval' && <AlertCircle className="h-3.5 w-3.5 text-amber-500" title="Awaiting Approval" />}
+                      {c.suspended && <Ban className="h-3.5 w-3.5 text-red-500" aria-label="Suspended" />}
+                      {c.status === 'pending_approval' && <AlertCircle className="h-3.5 w-3.5 text-amber-500" aria-label="Awaiting Approval" />}
                     </div>
                   </td>
                   <td className="px-4 py-3 text-muted-foreground hidden md:table-cell">{c.ownerEmail}</td>

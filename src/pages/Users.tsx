@@ -1,7 +1,7 @@
 import { useEffect, useState, useMemo } from 'react'
 import { adminApi } from '../lib/api'
 import {
-  Search, Ban, Trash2, Loader2, X, Users as UsersIcon, Building2,
+  Search, Trash2, Loader2, X, Users as UsersIcon, Building2,
   Mail, Calendar, ShieldCheck, ShieldOff, ChevronDown, ChevronRight,
   CheckCircle2, AlertCircle, User, Clock,
 } from 'lucide-react'
@@ -408,7 +408,6 @@ export default function Users() {
           <div className="divide-y divide-border">
             {grouped.map(([key, { name, users: groupUsers, ghosts }]) => {
               const isOpen = expandedGroups.has(key)
-              const totalCount = groupUsers.length + ghosts.length
               return (
                 <div key={key}>
                   {/* Group header */}

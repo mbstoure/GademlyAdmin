@@ -218,15 +218,7 @@ CREATE POLICY "admin_sessions_delete" ON public.admin_sessions
     }
   }
 
-  const revokeSession = async (id: string) => {
-    setRevokingId(id)
-    try {
-      await adminApi.revokeSession(id)
-      setSessions(prev => prev.filter(s => s.id !== id))
-      toast.success('Session revoked')
-    } catch (e: any) { toast.error(e.message) }
-    finally { setRevokingId(null) }
-  }
+
 
   const addIp = () => {
     const ip = newIp.trim()
