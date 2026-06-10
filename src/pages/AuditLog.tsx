@@ -180,6 +180,7 @@ export default function AuditLog() {
 
             {/* Action */}
             <select value={action} onChange={e => setAction(e.target.value)}
+              title="Filter by action"
               className="h-10 w-full rounded-md border border-input bg-input-background px-3 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
               <option value="all">All actions</option>
               {ALL_ACTIONS.map(a => <option key={a} value={a} className="capitalize">{a}</option>)}
@@ -187,6 +188,7 @@ export default function AuditLog() {
 
             {/* Company */}
             <select value={company} onChange={e => setCompany(e.target.value)}
+              title="Filter by company"
               className="h-10 w-full rounded-md border border-input bg-input-background px-3 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
               <option value="all">All companies</option>
               {companies.map((c: any) => <option key={c.id} value={c.id}>{c.name}</option>)}
@@ -198,11 +200,13 @@ export default function AuditLog() {
             <div className="flex items-center gap-2">
               <label className="text-xs text-muted-foreground font-medium whitespace-nowrap">From</label>
               <input type="date" value={from} onChange={e => setFrom(e.target.value)}
+                aria-label="From date" title="From date"
                 className="h-9 rounded-md border border-input bg-input-background px-3 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring" />
             </div>
             <div className="flex items-center gap-2">
               <label className="text-xs text-muted-foreground font-medium whitespace-nowrap">To</label>
               <input type="date" value={to} onChange={e => setTo(e.target.value)}
+                aria-label="To date" title="To date"
                 className="h-9 rounded-md border border-input bg-input-background px-3 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring" />
             </div>
             {hasActiveFilters && (

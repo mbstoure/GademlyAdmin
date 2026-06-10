@@ -46,10 +46,14 @@ const PW_RULES = [
   { label: 'One special character',   test: (pw: string) => /[^A-Za-z0-9]/.test(pw) },
 ]
 
-function Toggle({ on, onToggle, danger = false }: { on: boolean; onToggle: () => void; danger?: boolean }) {
+function Toggle({ on, onToggle, danger = false, label = 'Toggle' }: { on: boolean; onToggle: () => void; danger?: boolean; label?: string }) {
   return (
     <button
       onClick={onToggle}
+      title={label}
+      aria-label={label}
+      aria-checked={on}
+      role="switch"
       className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-primary/30
         ${on ? (danger ? 'bg-destructive' : 'bg-primary') : 'bg-muted'}`}
     >
@@ -278,6 +282,9 @@ CREATE POLICY "admin_sessions_delete" ON public.admin_sessions
               <input
                 value={local.platformName || ''}
                 onChange={e => setField('platformName', e.target.value)}
+                title="Platform Name"
+                aria-label="Platform Name"
+                placeholder="e.g. Gademly"
                 className="flex h-9 w-44 rounded-md border border-input bg-input-background px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring text-right"
               />
             </SettingRow>
@@ -622,6 +629,8 @@ CREATE POLICY "admin_sessions_delete" ON public.admin_sessions
                       <Wifi className="h-4 w-4 text-muted-foreground flex-shrink-0" />
                       <span className="flex-1 text-sm font-mono">{ip}</span>
                       <button onClick={() => removeIp(ip)}
+                        title={`Remove ${ip}`}
+                        aria-label={`Remove IP ${ip}`}
                         className="p-0.5 rounded hover:bg-destructive/10 text-muted-foreground hover:text-destructive transition-colors">
                         <X className="h-3.5 w-3.5" />
                       </button>

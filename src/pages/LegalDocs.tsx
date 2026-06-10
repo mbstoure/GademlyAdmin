@@ -273,7 +273,7 @@ export default function LegalDocs() {
               ))}
             </div>
           </div>
-          <button onClick={() => setReminder(null)} className="text-amber-600 hover:text-amber-800 transition-colors">
+          <button onClick={() => setReminder(null)} title="Dismiss reminder" className="text-amber-600 hover:text-amber-800 transition-colors">
             <X className="h-4 w-4" />
           </button>
         </div>
@@ -359,6 +359,7 @@ export default function LegalDocs() {
                   value={cur.version}
                   onChange={e => set(activeDoc, { version: e.target.value })}
                   placeholder="e.g. 1.1"
+                  aria-label="Version number"
                   className="w-full text-lg font-bold bg-transparent border-b border-border focus:outline-none focus:border-primary pb-1"
                 />
               </div>
@@ -404,7 +405,7 @@ export default function LegalDocs() {
                         placeholder="Describe what changed…"
                         className="flex-1 text-sm bg-muted/50 rounded-md px-3 py-1.5 border border-border focus:outline-none focus:border-primary"
                       />
-                      <button onClick={() => removeChange(activeDoc, i)} className="text-muted-foreground hover:text-destructive transition-colors">
+                      <button onClick={() => removeChange(activeDoc, i)} title="Remove bullet" className="text-muted-foreground hover:text-destructive transition-colors">
                         <Trash2 className="h-4 w-4" />
                       </button>
                     </div>

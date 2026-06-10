@@ -62,7 +62,7 @@ function UserModal({ user, onClose, onBan, onDelete, onApprove, busy }: {
               <p className="text-sm text-muted-foreground">{user.email}</p>
             </div>
           </div>
-          <button onClick={onClose} className="p-1.5 rounded-md hover:bg-accent text-muted-foreground">
+          <button onClick={onClose} title="Close" className="p-1.5 rounded-md hover:bg-accent text-muted-foreground">
             <X className="h-4 w-4" />
           </button>
         </div>
@@ -357,6 +357,7 @@ export default function Users() {
 
         {/* Role filter */}
         <select value={roleFilter} onChange={e => setRoleFilter(e.target.value)}
+          title="Filter by role"
           className="h-10 rounded-md border border-input bg-input-background px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
           {roles.map(r => (
             <option key={r} value={r}>{r === 'all' ? 'All roles' : r.replace(/_/g, ' ')}</option>
@@ -365,6 +366,7 @@ export default function Users() {
 
         {/* Status filter */}
         <select value={statusFilter} onChange={e => setStatusFilter(e.target.value)}
+          title="Filter by status"
           className="h-10 rounded-md border border-input bg-input-background px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
           {statuses.map(s => (
             <option key={s} value={s}>{s === 'all' ? 'All statuses' : s.replace(/_/g, ' ')}</option>

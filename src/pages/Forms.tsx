@@ -42,7 +42,7 @@ function FormModal({ form, onClose, onDelete, onToggleActive }: {
               </div>
             </div>
           </div>
-          <button onClick={onClose} className="p-1.5 rounded-md hover:bg-accent text-muted-foreground">
+          <button onClick={onClose} title="Close" className="p-1.5 rounded-md hover:bg-accent text-muted-foreground">
             <X className="h-4 w-4" />
           </button>
         </div>

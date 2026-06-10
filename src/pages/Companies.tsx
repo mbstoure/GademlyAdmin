@@ -83,7 +83,7 @@ function CompanyModal({
               </div>
             </div>
           </div>
-          <button onClick={onClose} className="p-1.5 rounded-md hover:bg-accent transition-colors text-muted-foreground">
+          <button onClick={onClose} title="Close" className="p-1.5 rounded-md hover:bg-accent transition-colors text-muted-foreground">
             <X className="h-4 w-4" />
           </button>
         </div>
@@ -154,11 +154,13 @@ function CompanyModal({
               <div className="space-y-2">
                 <label className="text-sm font-medium">Company name</label>
                 <input value={name} onChange={e => setName(e.target.value)}
+                  aria-label="Company name" placeholder="Company name"
                   className="flex h-10 w-full rounded-md border border-input bg-input-background px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring" />
               </div>
               <div className="space-y-2">
                 <label className="text-sm font-medium">Plan</label>
                 <select value={plan} onChange={e => setPlan(e.target.value)}
+                  title="Select plan"
                   className="flex h-10 w-full rounded-md border border-input bg-input-background px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
                   <option value="starter">Starter</option>
                   <option value="pro">Pro</option>
