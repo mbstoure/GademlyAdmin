@@ -11,7 +11,14 @@ const ROLE_COLORS: Record<string, string> = {
   super_admin:   'bg-violet-100 text-violet-700 dark:bg-violet-900/40 dark:text-violet-300',
   company_admin: 'bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300',
   agent:         'bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300',
+  sub_agent:     'bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-400',
 }
+
+const ROLE_OPTIONS = [
+  { value: 'company_admin', label: 'Company Admin' },
+  { value: 'agent',         label: 'Agent' },
+  { value: 'sub_agent',     label: 'Sub Agent' },
+]
 
 const STATUS_COLORS: Record<string, string> = {
   active:           'bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300',
@@ -34,14 +41,27 @@ function fmtDate(iso?: string | null) {
 }
 
 // ── User Detail Modal ─────────────────────────────────────────────────────────
-function UserModal({ user, onClose, onBan, onDelete, onApprove, busy }: {
+function UserModal({ user, onClose, onBan, onDelete, onApprove, onRoleChange, busy }: {
   user: any
   onClose: () => void
   onBan: (u: any) => Promise<void>
   onDelete: (u: any) => Promise<void>
   onApprove: (id: string) => Promise<void>
+  onRoleChange: (id: string, role: string) => Promise<void>
   busy: boolean
 }) {
+  const [editingRole, setEditingRole] = useState(false)
+  const [selectedRole, setSelectedRole] = useState(user.role)
+  const [savingRole, setSavingRole] = useState(false)
+
+  const saveRole = async () => {
+    if (selectedRole === user.role) { setEditingRole(false); return; }
+    setSavingRole(true)
+    await onRoleChange(user.id, selectedRole)
+    setSavingRole(false)
+    setEditingRole(false)
+  }
+
   const isBanned    = user.status === 'banned' || user.suspended
   const isPending   = user.status === 'pending_approval'
   const effectiveStatus = user.suspended ? 'suspended' : user.status
@@ -71,7 +91,6 @@ function UserModal({ user, onClose, onBan, onDelete, onApprove, busy }: {
         <div className="p-5 space-y-3">
           {[
             { icon: Building2, label: 'Company',    value: user.companyName || '—' },
-            { icon: ShieldCheck, label: 'Role',     value: user.role?.replace(/_/g, ' ') || '—' },
             { icon: Calendar,  label: 'Joined',     value: fmtDate(user.createdAt) },
             { icon: Clock,     label: 'Last login', value: fmt(user.lastLoginAt || user.lastSignInAt) },
           ].map(({ icon: Icon, label, value }) => (
@@ -83,6 +102,47 @@ function UserModal({ user, onClose, onBan, onDelete, onApprove, busy }: {
               </div>
             </div>
           ))}
+
+          {/* Role — editable for non-super_admin users */}
+          <div className="flex items-start gap-3 p-3 rounded-xl bg-muted/30">
+            <ShieldCheck className="h-4 w-4 text-muted-foreground mt-0.5 flex-shrink-0" />
+            <div className="flex-1 min-w-0">
+              <p className="text-xs text-muted-foreground">Role</p>
+              {user.role === 'super_admin' ? (
+                <p className="text-sm font-medium capitalize">Super Admin</p>
+              ) : editingRole ? (
+                <div className="flex items-center gap-2 mt-1">
+                  <select
+                    value={selectedRole}
+                    onChange={e => setSelectedRole(e.target.value)}
+                    className="text-sm border rounded px-2 py-1 bg-background"
+                  >
+                    {ROLE_OPTIONS.map(o => (
+                      <option key={o.value} value={o.value}>{o.label}</option>
+                    ))}
+                  </select>
+                  <button onClick={saveRole} disabled={savingRole}
+                    className="px-2 py-1 rounded text-xs bg-primary text-primary-foreground disabled:opacity-50">
+                    {savingRole ? '...' : 'Save'}
+                  </button>
+                  <button onClick={() => { setEditingRole(false); setSelectedRole(user.role); }}
+                    className="px-2 py-1 rounded text-xs border hover:bg-accent">
+                    Cancel
+                  </button>
+                </div>
+              ) : (
+                <div className="flex items-center gap-2">
+                  <span className={`text-xs font-medium px-2 py-0.5 rounded capitalize ${ROLE_COLORS[user.role] || ROLE_COLORS.agent}`}>
+                    {user.role?.replace(/_/g, ' ')}
+                  </span>
+                  <button onClick={() => setEditingRole(true)}
+                    className="text-xs text-primary hover:underline">
+                    Change
+                  </button>
+                </div>
+              )}
+            </div>
+          </div>
 
           {/* Status badge */}
           <div className="flex items-center gap-2 p-3 rounded-xl bg-muted/30">
@@ -267,6 +327,17 @@ export default function Users() {
     try {
       await adminApi.approveUser(id)
       toast.success('User approved — verification email sent')
+      load()
+      setSelected(null)
+    } catch (e: any) { toast.error(e.message) }
+    finally { setBusy(null) }
+  }
+
+  const handleRoleChange = async (id: string, role: string) => {
+    setBusy(id)
+    try {
+      await adminApi.updateUser(id, { role })
+      toast.success(`Role updated to ${role.replace(/_/g, ' ')}`)
       load()
       setSelected(null)
     } catch (e: any) { toast.error(e.message) }
@@ -507,6 +578,7 @@ export default function Users() {
           onBan={handleBan}
           onDelete={handleDelete}
           onApprove={handleApprove}
+          onRoleChange={handleRoleChange}
           busy={busy === selected.id}
         />
       )}
