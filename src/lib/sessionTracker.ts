@@ -101,7 +101,7 @@ export async function recordAdminLogin(): Promise<void> {
       .neq('session_token', fingerprint)
       .then(() => {/* ignore */})
 
-    await supabase
+    const { error } = await supabase
       .from('admin_sessions')
       .upsert(
         {
@@ -117,6 +117,12 @@ export async function recordAdminLogin(): Promise<void> {
         },
         { onConflict: 'user_id,session_token', ignoreDuplicates: false }
       )
+    // If the table doesn't exist (400/42P01), silently disable tracking
+    if (error) {
+      if ((error as any).code === '42P01' || (error.message || '').includes('does not exist') || (error as any).status === 400) {
+        disableSessionTracking()
+      }
+    }
   } catch {
     // Never block the login flow
   }
@@ -131,11 +137,14 @@ export async function pingSession(): Promise<void> {
     const { data } = await supabase.auth.getSession()
     if (!data.session) return
     const fingerprint = tokenFingerprint(data.session.access_token)
-    await supabase
+    const { error } = await supabase
       .from('admin_sessions')
       .update({ last_active: new Date().toISOString() })
       .eq('session_token', fingerprint)
       .eq('user_id', data.session.user.id)
+    if (error && ((error as any).code === '42P01' || (error as any).status === 400)) {
+      disableSessionTracking()
+    }
   } catch {}
 }
 
