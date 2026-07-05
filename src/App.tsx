@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { supabase } from './lib/supabase'
-import { recordAdminLogin, pingSession } from './lib/sessionTracker'
+import { recordAdminLogin, pingSession, probeSessionTable } from './lib/sessionTracker'
 import Login from './pages/Login'
 import Layout from './components/Layout'
 import Dashboard from './pages/Dashboard'
@@ -68,9 +68,12 @@ function App() {
       if (s) fetchProfile(s.access_token)
       else { setProfile(null); setLoading(false) }
     })
-    // Ping last_active every 5 minutes while the portal is open
-    const pingInterval = setInterval(pingSession, 5 * 60 * 1000)
-    return () => { subscription.unsubscribe(); clearInterval(pingInterval) }
+    // Probe once: if admin_sessions table doesn't exist, disable flag before any pings fire
+    probeSessionTable().then(() => {
+      const pingInterval = setInterval(pingSession, 5 * 60 * 1000)
+      return () => clearInterval(pingInterval)
+    })
+    return () => { subscription.unsubscribe() }
   }, [])
 
   async function fetchProfile(token: string) {

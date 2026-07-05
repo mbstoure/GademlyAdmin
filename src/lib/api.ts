@@ -76,6 +76,8 @@ export const adminApi = {
   addMonthToSubscription: (companyId: string) => req<any>('POST', `/make-server-c6b0f6c0/admin/subscriptions/${companyId}/add-month`, {}),
   sendExpiryReminder: (companyId: string) => req<any>('POST', `/make-server-c6b0f6c0/admin/subscriptions/${companyId}/send-expiry-reminder`, {}),
   impersonate: (companyId: string) => req<any>('POST', `/make-server-c6b0f6c0/admin/impersonate/${companyId}`),
+  getCompanyUsers: (companyId: string) => req<any>('GET', `/make-server-c6b0f6c0/admin/companies/${companyId}/users`),
+  impersonateUser: (userId: string) => req<any>('POST', `/make-server-c6b0f6c0/admin/impersonate/user/${userId}`),
 
   // Forms
   getForms: () => req<any>('GET', '/make-server-c6b0f6c0/admin/forms'),

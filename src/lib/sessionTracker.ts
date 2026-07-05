@@ -3,30 +3,87 @@
  *
  * Client-side admin session tracking using Supabase directly.
  *
- * ZERO network requests are made until the user explicitly confirms the
- * admin_sessions table has been created (by clicking "I've run the migration"
- * in Settings → Sessions). This eliminates all 404 console noise.
+ * ZERO network requests are made until:
+ *   1. The user explicitly enables tracking (localStorage flag), AND
+ *   2. A one-time startup probe confirms the table exists (in-memory gate).
+ *
+ * This dual-gate eliminates ALL 400 console noise.
  */
 
 import { supabase } from './supabase'
 
 // ── Setup flag ────────────────────────────────────────────────────────────────
-// Stored in localStorage so it survives page refreshes across devices.
-
 const LS_KEY = 'gademly_admin_sessions_enabled'
 
+// ── In-memory probe gate ──────────────────────────────────────────────────────
+// Both must be true before any DB call is made.
+// Starts false — no requests until probeSessionTable() resolves successfully.
+let _probeComplete = false
+let _probeOk = false
+
 export function isSessionTrackingEnabled(): boolean {
-  return localStorage.getItem(LS_KEY) === 'true'
+  // Must have the localStorage flag AND the startup probe must have passed
+  return _probeComplete && _probeOk && localStorage.getItem(LS_KEY) === 'true'
 }
 
 /** Call when the user confirms the migration has been run. */
 export function enableSessionTracking(): void {
   localStorage.setItem(LS_KEY, 'true')
+  // Reset probe so next operation re-verifies the table exists
+  _probeComplete = false
+  _probeOk = false
 }
 
 /** Call to reset (e.g. after a DB wipe). */
 export function disableSessionTracking(): void {
   localStorage.removeItem(LS_KEY)
+  _probeComplete = true  // mark complete so we stop retrying
+  _probeOk = false
+}
+
+/**
+ * Run once on app startup — BEFORE the ping interval starts.
+ * Sets the in-memory gate. If the table doesn't exist (400/42P01),
+ * clears localStorage so no further requests ever fire.
+ */
+export async function probeSessionTable(): Promise<void> {
+  // Already probed this session — skip
+  if (_probeComplete) return
+  // Flag not set — no point probing
+  if (localStorage.getItem(LS_KEY) !== 'true') {
+    _probeComplete = true
+    _probeOk = false
+    return
+  }
+  try {
+    const { error } = await supabase
+      .from('admin_sessions')
+      .select('id')
+      .limit(1)
+    if (error) {
+      const isMissing =
+        (error as any).status === 400 ||
+        (error as any).code === '42P01' ||
+        (error.message || '').includes('does not exist') ||
+        (error.message || '').includes('relation') ||
+        (error.message || '').includes('permission denied')
+      if (isMissing) {
+        disableSessionTracking()
+      } else {
+        // Some other error (e.g. RLS denied for a valid table) — table exists
+        _probeComplete = true
+        _probeOk = true
+      }
+    } else {
+      // Query succeeded — table exists and is accessible
+      _probeComplete = true
+      _probeOk = true
+    }
+  } catch {
+    // Network error — leave gate closed, will retry on next page load
+    _probeComplete = true
+    _probeOk = false
+  }
 }
 
 // ── User-agent parsing ────────────────────────────────────────────────────────
@@ -117,11 +174,11 @@ export async function recordAdminLogin(): Promise<void> {
         },
         { onConflict: 'user_id,session_token', ignoreDuplicates: false }
       )
-    // If the table doesn't exist (400/42P01), silently disable tracking
+    // If the table doesn't exist (400/42P01), immediately disable tracking so no further requests are made
     if (error) {
-      if ((error as any).code === '42P01' || (error.message || '').includes('does not exist') || (error as any).status === 400) {
-        disableSessionTracking()
-      }
+      const is400 = (error as any).status === 400 || (error as any).code === '42P01' || (error.message || '').includes('does not exist')
+      if (is400) disableSessionTracking()
+      return  // stop – don't loop
     }
   } catch {
     // Never block the login flow
@@ -142,8 +199,9 @@ export async function pingSession(): Promise<void> {
       .update({ last_active: new Date().toISOString() })
       .eq('session_token', fingerprint)
       .eq('user_id', data.session.user.id)
-    if (error && ((error as any).code === '42P01' || (error as any).status === 400)) {
-      disableSessionTracking()
+    if (error) {
+      const is400 = (error as any).status === 400 || (error as any).code === '42P01' || (error.message || '').includes('does not exist')
+      if (is400) disableSessionTracking()
     }
   } catch {}
 }

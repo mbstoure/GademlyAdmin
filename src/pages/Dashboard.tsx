@@ -22,8 +22,10 @@ const PLAN_LABELS: Record<string, string> = {
   trial: 'Trial',
 }
 
-function prettyPlan(raw: string): string {
-  if (!raw) return 'Unknown'
+function prettyPlan(raw: unknown): string {
+  if (raw == null) return 'Unknown'
+  if (typeof raw !== 'string') return String(raw)
+  if (!raw.trim()) return 'Unknown'
   return PLAN_LABELS[raw.toLowerCase()] ?? raw.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase())
 }
 
@@ -40,7 +42,11 @@ function timeAgo(iso: string | undefined | null): string {
   if (m < 60)  return `${m}m ago`
   if (h < 24)  return `${h}h ago`
   if (d <  7)  return `${d}d ago`
-  return new Date(iso).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })
+  // Older than 7 days — show date + time
+  return new Date(iso).toLocaleString(undefined, {
+    month: 'short', day: 'numeric', year: 'numeric',
+    hour: '2-digit', minute: '2-digit',
+  })
 }
 
 function greeting() {
@@ -242,7 +248,7 @@ export default function Dashboard() {
                     <div className="flex-1 min-w-0">
                       <p className="text-sm font-medium">{log.action} — {log.targetType}</p>
                       <p className="text-xs text-muted-foreground truncate">{log.adminEmail}</p>
-                      <p className="text-xs text-muted-foreground mt-0.5">{timeAgo(log.createdAt)}</p>
+                      <p className="text-xs text-muted-foreground mt-0.5">{timeAgo(log.timestamp || log.createdAt)}</p>
                     </div>
                   </div>
                 ))}

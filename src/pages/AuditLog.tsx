@@ -26,17 +26,24 @@ const ACTION_BADGES: Record<string, string> = {
 
 const ALL_ACTIONS = ['create', 'update', 'delete', 'impersonate', 'login', 'settings', 'approve', 'suspend']
 
-function fmtFull(iso: string | undefined | null): string {
+/** Normalise timestamp across both KV stores: platform:audit_log uses 'timestamp', legal publish uses 'createdAt' */
+function getLogTs(log: any): string | undefined {
+  return log.timestamp || log.createdAt || undefined
+}
+
+function fmtFull(log: any): string {
+  const iso = getLogTs(log)
   if (!iso) return '—'
   try {
     return new Date(iso).toLocaleString('en-US', {
       month: 'short', day: 'numeric', year: 'numeric',
       hour: '2-digit', minute: '2-digit', second: '2-digit',
     })
-  } catch { return iso ?? '—' }
+  } catch { return iso }
 }
 
-function timeAgo(iso: string | undefined | null): string {
+function timeAgo(log: any): string {
+  const iso = getLogTs(log)
   if (!iso) return '—'
   const ms = new Date(iso).getTime()
   if (isNaN(ms)) return '—'
@@ -104,12 +111,12 @@ export default function AuditLog() {
       // Date range filter
       if (from) {
         const fromTs = new Date(from).getTime()
-        const logTs  = new Date(log.createdAt).getTime()
+        const logTs  = new Date(getLogTs(log) || 0).getTime()
         if (logTs < fromTs) return false
       }
       if (to) {
         const toTs  = new Date(to).getTime() + 86_399_999 // include full day
-        const logTs = new Date(log.createdAt).getTime()
+        const logTs = new Date(getLogTs(log) || 0).getTime()
         if (logTs > toTs) return false
       }
 
@@ -252,8 +259,8 @@ export default function AuditLog() {
                       <div className="flex items-center gap-2">
                         <div className={`w-2 h-2 rounded-full flex-shrink-0 ${ACTION_COLORS[log.action] || 'bg-slate-400'}`} />
                         <div>
-                          <p className="text-xs font-medium tabular-nums">{fmtFull(log.createdAt)}</p>
-                          <p className="text-[11px] text-muted-foreground">{timeAgo(log.createdAt)}</p>
+                          <p className="text-xs font-medium tabular-nums">{fmtFull(log)}</p>
+                          <p className="text-[11px] text-muted-foreground">{timeAgo(log)}</p>
                         </div>
                       </div>
                     </td>

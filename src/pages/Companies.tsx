@@ -3,7 +3,7 @@ import { adminApi } from '../lib/api'
 import {
   Search, Trash2, LogIn, X, Check, Loader2, Users, GraduationCap,
   Building2, Calendar, Mail, ShieldCheck, ShieldOff, Clock,
-  AlertCircle, CheckCircle2, Ban,
+  AlertCircle, CheckCircle2, Ban, UserCircle2, ExternalLink,
 } from 'lucide-react'
 import { toast } from 'sonner'
 
@@ -24,6 +24,141 @@ function fmtDate(iso?: string | null) {
   try { return new Date(iso).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) }
   catch { return iso }
 }
+function timeAgo(iso?: string | null): string {
+  if (!iso) return '—'
+  const ms = new Date(iso).getTime()
+  if (isNaN(ms)) return '—'
+  const diff = Date.now() - ms
+  const m = Math.floor(diff / 60_000)
+  const h = Math.floor(diff / 3_600_000)
+  const d = Math.floor(diff / 86_400_000)
+  if (m < 2) return 'just now'
+  if (m < 60) return `${m}m ago`
+  if (h < 24) return `${h}h ago`
+  if (d < 7) return `${d}d ago`
+  return fmtDate(iso)
+}
+
+const ROLE_COLORS: Record<string, string> = {
+  company_admin: 'bg-violet-100 text-violet-700 dark:bg-violet-900/40 dark:text-violet-300',
+  agent:         'bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300',
+  sub_agent:     'bg-sky-100 text-sky-700 dark:bg-sky-900/40 dark:text-sky-300',
+  university:    'bg-teal-100 text-teal-700 dark:bg-teal-900/40 dark:text-teal-300',
+}
+
+// ── Impersonate User Picker Modal ─────────────────────────────────────────────
+function ImpersonateModal({ companyId, companyName, onClose }: {
+  companyId: string
+  companyName: string
+  onClose: () => void
+}) {
+  const [users, setUsers] = useState<any[]>([])
+  const [loading, setLoading] = useState(true)
+  const [busyId, setBusyId] = useState<string | null>(null)
+
+  useEffect(() => {
+    adminApi.getCompanyUsers(companyId)
+      .then(r => setUsers(r.users || []))
+      .catch(() => toast.error('Failed to load company users'))
+      .finally(() => setLoading(false))
+  }, [companyId])
+
+  const handleLoginAs = async (user: any) => {
+    setBusyId(user.id)
+    try {
+      const res = await adminApi.impersonateUser(user.id)
+      if (res.url) {
+        window.open(res.url, '_blank')
+        toast.success(`Impersonation link opened for ${user.email}`)
+        onClose()
+      } else {
+        toast.error('Could not generate impersonation link')
+      }
+    } catch (e: any) {
+      toast.error(e.message || 'Impersonation failed')
+    } finally {
+      setBusyId(null)
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+      <div className="bg-card border border-border rounded-2xl shadow-2xl w-full max-w-lg max-h-[80vh] flex flex-col">
+        {/* Header */}
+        <div className="flex items-center justify-between px-6 py-4 border-b border-border">
+          <div>
+            <h2 className="text-lg font-semibold">Login as User</h2>
+            <p className="text-xs text-muted-foreground mt-0.5">{companyName} • Opens in a new tab</p>
+          </div>
+          <button onClick={onClose} className="p-1.5 rounded-md hover:bg-accent transition-colors">
+            <X className="h-4 w-4" />
+          </button>
+        </div>
+
+        {/* User List */}
+        <div className="overflow-y-auto flex-1 divide-y divide-border">
+          {loading ? (
+            <div className="flex items-center justify-center py-12 text-muted-foreground">
+              <Loader2 className="h-5 w-5 animate-spin mr-2" /> Loading users…
+            </div>
+          ) : users.length === 0 ? (
+            <div className="py-12 text-center text-sm text-muted-foreground">
+              <UserCircle2 className="h-8 w-8 mx-auto mb-2 opacity-30" />
+              No users found in this company.
+            </div>
+          ) : (
+            users.map(u => (
+              <div key={u.id} className="flex items-center gap-4 px-6 py-3.5 hover:bg-accent/30 transition-colors">
+                {/* Avatar */}
+                <div className="w-9 h-9 rounded-full bg-primary/10 flex items-center justify-center flex-shrink-0">
+                  <span className="text-sm font-semibold text-primary">
+                    {(u.fullName || u.email || '?')[0].toUpperCase()}
+                  </span>
+                </div>
+
+                {/* Info */}
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <p className="text-sm font-medium truncate">{u.fullName || u.email}</p>
+                    <span className={`inline-flex px-1.5 py-0.5 rounded text-[11px] font-medium capitalize ${ROLE_COLORS[u.role] || ROLE_COLORS.agent}`}>
+                      {u.roleName || u.role.replace(/_/g, ' ')}
+                    </span>
+                  </div>
+                  <p className="text-xs text-muted-foreground truncate">{u.email}</p>
+                  <div className="flex items-center gap-1 mt-0.5">
+                    <Clock className="h-3 w-3 text-muted-foreground" />
+                    <span className="text-[11px] text-muted-foreground">Last active: {timeAgo(u.lastActive)}</span>
+                  </div>
+                </div>
+
+                {/* Action */}
+                <button
+                  onClick={() => handleLoginAs(u)}
+                  disabled={busyId === u.id}
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-primary text-primary-foreground text-xs font-medium hover:bg-primary/90 disabled:opacity-50 transition-colors flex-shrink-0"
+                >
+                  {busyId === u.id
+                    ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                    : <ExternalLink className="h-3.5 w-3.5" />
+                  }
+                  Login as
+                </button>
+              </div>
+            ))
+          )}
+        </div>
+
+        {/* Footer */}
+        <div className="px-6 py-3 border-t border-border bg-muted/30 rounded-b-2xl">
+          <p className="text-[11px] text-muted-foreground">
+            <AlertCircle className="h-3 w-3 inline mr-1" />
+            Impersonation tokens expire in 30 minutes and are single-use.
+          </p>
+        </div>
+      </div>
+    </div>
+  )
+}
 
 // ── Detail Modal ──────────────────────────────────────────────────────────────
 function CompanyModal({
@@ -33,7 +168,7 @@ function CompanyModal({
   onClose: () => void
   onSave: (id: string, data: any) => Promise<void>
   onDelete: (id: string, name: string) => Promise<void>
-  onImpersonate: (id: string) => Promise<void>
+  onImpersonate: (id: string) => void | Promise<void>
   onSuspend: (c: any) => Promise<void>
   onApprove: (id: string) => Promise<void>
 }) {
@@ -228,6 +363,7 @@ export default function Companies() {
   const [search, setSearch] = useState('')
   const [selected, setSelected] = useState<any>(null)
   const [tab, setTab] = useState<'all' | 'pending'>('all')
+  const [impersonateTarget, setImpersonateTarget] = useState<any | null>(null)
 
   const load = async () => {
     setLoading(true)
@@ -261,12 +397,9 @@ export default function Companies() {
     } catch (e: any) { toast.error(e.message) }
   }
 
-  const handleImpersonate = async (companyId: string) => {
-    try {
-      const res = await adminApi.impersonate(companyId)
-      if (res.url) window.open(res.url, '_blank')
-      else toast.error('Could not generate impersonation link')
-    } catch (e: any) { toast.error(e.message) }
+  const handleImpersonate = (companyId: string) => {
+    const company = companies.find(c => c.id === companyId)
+    if (company) setImpersonateTarget(company)
   }
 
   const handleSuspend = async (c: any) => {
@@ -401,6 +534,15 @@ export default function Companies() {
           onImpersonate={handleImpersonate}
           onSuspend={handleSuspend}
           onApprove={handleApprove}
+        />
+      )}
+
+      {/* Impersonate user-picker modal */}
+      {impersonateTarget && (
+        <ImpersonateModal
+          companyId={impersonateTarget.id}
+          companyName={impersonateTarget.name}
+          onClose={() => setImpersonateTarget(null)}
         />
       )}
     </div>
