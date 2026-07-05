@@ -13,7 +13,24 @@
 import { supabase } from './supabase'
 
 // ── Setup flag ────────────────────────────────────────────────────────────────
-const LS_KEY = 'gademly_admin_sessions_enabled'
+// v2 key — forces a clean slate; the old key 'gademly_admin_sessions_enabled'
+// may be 'true' from previous sessions, which would trigger a probe (and 400 errors).
+// Clearing the old key on module load silences console noise permanently.
+const LS_KEY    = 'gademly_sessions_v2'
+const LS_KEY_V1 = 'gademly_admin_sessions_enabled'
+// One-time migration: clear the old key so the probe never fires for users
+// who enabled sessions with the old code but don't have the DB table yet.
+;(() => {
+  try {
+    if (localStorage.getItem(LS_KEY_V1) !== null) {
+      // If v1 was true, preserve intent by also setting v2
+      if (localStorage.getItem(LS_KEY_V1) === 'true') {
+        // Don't auto-enable v2 — force a re-enable after the table is confirmed
+      }
+      localStorage.removeItem(LS_KEY_V1)
+    }
+  } catch { /* storage blocked */ }
+})()
 
 // ── In-memory probe gate ──────────────────────────────────────────────────────
 // Both must be true before any DB call is made.
@@ -43,44 +60,60 @@ export function disableSessionTracking(): void {
 
 /**
  * Run once on app startup — BEFORE the ping interval starts.
- * Sets the in-memory gate. If the table doesn't exist (400/42P01),
- * clears localStorage so no further requests ever fire.
+ * Uses raw fetch (not the Supabase client) so no 400 console error is logged
+ * by the Supabase JS SDK when the table doesn't exist.
+ * Sets the in-memory gate. If the table is missing, clears LS flag permanently.
  */
 export async function probeSessionTable(): Promise<void> {
   // Already probed this session — skip
   if (_probeComplete) return
-  // Flag not set — no point probing
+  // LS flag not set — nothing to probe, mark done
   if (localStorage.getItem(LS_KEY) !== 'true') {
     _probeComplete = true
     _probeOk = false
     return
   }
+
   try {
-    const { error } = await supabase
-      .from('admin_sessions')
-      .select('id')
-      .limit(1)
-    if (error) {
-      const isMissing =
-        (error as any).status === 400 ||
-        (error as any).code === '42P01' ||
-        (error.message || '').includes('does not exist') ||
-        (error.message || '').includes('relation') ||
-        (error.message || '').includes('permission denied')
-      if (isMissing) {
-        disableSessionTracking()
-      } else {
-        // Some other error (e.g. RLS denied for a valid table) — table exists
-        _probeComplete = true
-        _probeOk = true
+    // Read env vars directly (no import — they're inlined by Vite)
+    const supabaseUrl = (import.meta as any).env?.VITE_SUPABASE_URL as string
+    const anonKey    = (import.meta as any).env?.VITE_SUPABASE_ANON_KEY as string
+    if (!supabaseUrl || !anonKey) {
+      _probeComplete = true
+      _probeOk = false
+      return
+    }
+
+    // Use the Supabase REST endpoint directly — no SDK logging
+    const { data: { session } } = await supabase.auth.getSession()
+    const token = session?.access_token || anonKey
+
+    const res = await fetch(
+      `${supabaseUrl}/rest/v1/admin_sessions?select=id&limit=1`,
+      {
+        headers: {
+          apikey: anonKey,
+          Authorization: `Bearer ${token}`,
+          Accept: 'application/json',
+          'Accept-Profile': 'public',
+        },
       }
-    } else {
-      // Query succeeded — table exists and is accessible
+    )
+
+    if (res.ok || res.status === 406) {
+      // 200 = table exists, 406 = table exists but no rows match
       _probeComplete = true
       _probeOk = true
+    } else if (res.status === 400 || res.status === 404 || res.status === 401) {
+      // Table doesn't exist or permission denied — disable silently
+      disableSessionTracking()
+    } else {
+      // Unknown status — leave gate closed
+      _probeComplete = true
+      _probeOk = false
     }
   } catch {
-    // Network error — leave gate closed, will retry on next page load
+    // Network error — leave gate closed, retry on next page load
     _probeComplete = true
     _probeOk = false
   }
