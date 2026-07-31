@@ -3,23 +3,37 @@ import { adminApi } from '../lib/api'
 import {
   Building2, Users, GraduationCap, FileText,
   TrendingUp, DollarSign, Activity, RefreshCw,
+  Zap, Shield,
 } from 'lucide-react'
 import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer } from 'recharts'
 
 // ── Colour palette for plan slices ────────────────────────────────────────────
-const PLAN_COLORS = ['#6366f1', '#8b5cf6', '#06b6d4', '#10b981', '#f59e0b', '#ef4444']
+const PLAN_COLORS: Record<string, string> = {
+  free:       '#94a3b8', // slate
+  growth:     '#6366f1', // indigo
+  pro:        '#10b981', // emerald
+  scale:      '#8b5cf6', // violet
+  // legacy normalisations
+  starter:    '#6366f1',
+  enterprise: '#8b5cf6',
+  unknown:    '#64748b',
+}
+const PLAN_COLOR_LIST = ['#6366f1', '#10b981', '#8b5cf6', '#94a3b8', '#f59e0b', '#ef4444']
 
-// Labels we want to display even when the server uses internal plan IDs
+// Canonical plan labels — normalise whatever the server returns
 const PLAN_LABELS: Record<string, string> = {
-  free: 'Free',
-  starter: 'Starter',
-  basic: 'Basic',
-  professional: 'Professional',
-  pro: 'Professional',
-  enterprise: 'Enterprise',
-  premium: 'Premium',
-  custom: 'Custom',
-  trial: 'Trial',
+  free:         'Free',
+  growth:       'Growth',
+  pro:          'Pro',
+  scale:        'Scale',
+  // legacy / shim
+  starter:      'Growth',
+  basic:        'Free',
+  professional: 'Pro',
+  enterprise:   'Scale',
+  premium:      'Pro',
+  custom:       'Scale',
+  trial:        'Trial',
 }
 
 function prettyPlan(raw: unknown): string {
@@ -27,6 +41,11 @@ function prettyPlan(raw: unknown): string {
   if (typeof raw !== 'string') return String(raw)
   if (!raw.trim()) return 'Unknown'
   return PLAN_LABELS[raw.toLowerCase()] ?? raw.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase())
+}
+
+function planColor(raw: string): string {
+  const key = raw.toLowerCase()
+  return PLAN_COLORS[key] ?? '#64748b'
 }
 
 function timeAgo(iso: string | undefined | null): string {
@@ -42,7 +61,6 @@ function timeAgo(iso: string | undefined | null): string {
   if (m < 60)  return `${m}m ago`
   if (h < 24)  return `${h}h ago`
   if (d <  7)  return `${d}d ago`
-  // Older than 7 days — show date + time
   return new Date(iso).toLocaleString(undefined, {
     month: 'short', day: 'numeric', year: 'numeric',
     hour: '2-digit', minute: '2-digit',
@@ -58,21 +76,20 @@ function greeting() {
 
 // ── Derive plan distribution + MRR from subscriptions array ──────────────────
 function deriveFromSubscriptions(subs: any[]): {
-  planData: { name: string; value: number }[]
+  planData: { name: string; value: number; rawKey: string }[]
   mrr: number
 } {
   const planCounts: Record<string, number> = {}
   let mrr = 0
 
   subs.forEach(s => {
-    // Only count active/trialing subscriptions
     const isActive = !s.status || ['active', 'trialing', 'past_due'].includes(s.status)
     if (!isActive) return
 
-    const plan = prettyPlan(s.plan || s.planId || s.tier || 'unknown')
-    planCounts[plan] = (planCounts[plan] || 0) + 1
+    const rawKey  = (s.planId || s.plan || s.tier || 'unknown').toLowerCase()
+    const display = prettyPlan(rawKey)
+    planCounts[display] = (planCounts[display] || 0) + 1
 
-    // MRR: prefer explicit field, else derive from amount + billing interval
     if (s.mrr) {
       mrr += Number(s.mrr)
     } else if (s.amount) {
@@ -88,28 +105,49 @@ function deriveFromSubscriptions(subs: any[]): {
   })
 
   const planData = Object.entries(planCounts)
-    .map(([name, value]) => ({ name, value }))
+    .map(([name, value]) => ({ name, value, rawKey: name.toLowerCase() }))
     .sort((a, b) => b.value - a.value)
 
   return { planData, mrr: Math.round(mrr) }
 }
 
+// ── Phase label helper ────────────────────────────────────────────────────────
+function phaseLabel(phase: string | number | undefined): string {
+  if (!phase) return 'Standard'
+  const p = String(phase)
+  if (p === '1') return 'Founding Phase 1'
+  if (p === '2') return 'Founding Phase 2'
+  if (p === '3') return 'Founding Phase 3'
+  if (p.toLowerCase().includes('standard')) return 'Standard'
+  return `Phase ${p}`
+}
+
+function phaseBadgeClass(phase: string | number | undefined): string {
+  const p = String(phase ?? '')
+  if (['1','2','3'].includes(p)) return 'bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300'
+  return 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300'
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 export default function Dashboard() {
-  const [stats, setStats] = useState<any>(null)
+  const [stats,         setStats]         = useState<any>(null)
   const [subscriptions, setSubscriptions] = useState<any[]>([])
-  const [logs, setLogs] = useState<any[]>([])
-  const [loading, setLoading] = useState(true)
-  const [logsLoading, setLogsLoading] = useState(true)
+  const [pricingConfig, setPricingConfig] = useState<any>(null)
+  const [logs,          setLogs]          = useState<any[]>([])
+  const [loading,       setLoading]       = useState(true)
+  const [logsLoading,   setLogsLoading]   = useState(true)
 
   const load = async () => {
     setLoading(true)
     try {
-      const [statsRes, subsRes] = await Promise.all([
+      const [statsRes, subsRes, configRes] = await Promise.all([
         adminApi.getStats(),
         adminApi.getSubscriptions().catch(() => ({ subscriptions: [] })),
+        (adminApi as any).getPricingConfig?.().catch(() => null),
       ])
       setStats(statsRes)
       setSubscriptions(subsRes.subscriptions || [])
+      setPricingConfig(configRes || null)
     } catch {}
     setLoading(false)
   }
@@ -126,22 +164,29 @@ export default function Dashboard() {
   useEffect(() => { load(); loadLogs() }, [])
 
   // ── Plan distribution ─────────────────────────────────────────────────────
-  // Priority: actual subscription records → fallback to server stats field
   const { planData, mrr: derivedMrr } = deriveFromSubscriptions(subscriptions)
 
-  // If server gave us plan distribution, merge it (server wins on count, we label nicely)
   const finalPlanData = planData.length > 0
     ? planData
     : stats?.planDistribution
-      ? Object.entries(stats.planDistribution).map(([k, v]) => ({ name: prettyPlan(k), value: Number(v) }))
+      ? Object.entries(stats.planDistribution).map(([k, v]) => ({
+          name: prettyPlan(k), value: Number(v), rawKey: k.toLowerCase(),
+        }))
       : []
 
-  // MRR: use derived value if > 0, else fall back to server stats
-  const finalMrr = derivedMrr > 0
-    ? derivedMrr
-    : (stats?.mrr ?? 0)
+  const finalMrr = derivedMrr > 0 ? derivedMrr : (stats?.mrr ?? 0)
+
+  // ── Founding-phase progress ───────────────────────────────────────────────
+  const currentPhase    = pricingConfig?.currentPhase ?? stats?.currentPhase
+  const paidCount       = pricingConfig?.paidAccountCount ?? stats?.paidAccountCount ?? 0
+  const foundingCap     = 500
+  const foundingPct     = Math.min(100, Math.round((paidCount / foundingCap) * 100))
+  const isFoundingPhase = ['1','2','3'].includes(String(currentPhase))
+  const phaseDeadline   = 'Aug 31, 2027'
 
   // ── Stat cards ────────────────────────────────────────────────────────────
+  const activeSubs = subscriptions.filter(s => !s.status || ['active', 'trialing'].includes(s.status)).length
+
   const statCards = [
     { label: 'Companies',   value: stats?.totalCompanies,  icon: Building2,     color: 'text-blue-600' },
     { label: 'Users',       value: stats?.totalUsers,      icon: Users,         color: 'text-violet-600' },
@@ -162,29 +207,65 @@ export default function Dashboard() {
   ]
 
   const ACTION_COLORS: Record<string, string> = {
-    create: 'bg-green-500',
-    update: 'bg-blue-500',
-    delete: 'bg-red-500',
-    login:  'bg-purple-500',
+    create:      'bg-green-500',
+    update:      'bg-blue-500',
+    delete:      'bg-red-500',
+    login:       'bg-purple-500',
     impersonate: 'bg-amber-500',
   }
 
-  // Active subscription count for context
-  const activeSubs = subscriptions.filter(s => !s.status || ['active', 'trialing'].includes(s.status)).length
-
   return (
     <div className="space-y-6">
-      {/* Greeting */}
-      <div>
-        <h1 className="text-3xl font-bold tracking-tight">
-          {greeting()}, Admin 👋
-        </h1>
-        <p className="text-muted-foreground mt-1">
-          Here's what's happening across your platform today.
-        </p>
+
+      {/* ── Greeting + phase pill ─────────────────────────────────────────── */}
+      <div className="flex items-start justify-between gap-4 flex-wrap">
+        <div>
+          <h1 className="text-3xl font-bold tracking-tight">
+            {greeting()}, Admin 👋
+          </h1>
+          <p className="text-muted-foreground mt-1">
+            Here's what's happening across your platform today.
+          </p>
+        </div>
+        {!loading && (
+          <span className={`inline-flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-full ${phaseBadgeClass(currentPhase)}`}>
+            {isFoundingPhase
+              ? <><Zap className="h-3 w-3" /> {phaseLabel(currentPhase)}</>
+              : <><Shield className="h-3 w-3" /> Standard Pricing</>
+            }
+          </span>
+        )}
       </div>
 
-      {/* Stat cards */}
+      {/* ── Founding-phase progress banner ────────────────────────────────── */}
+      {!loading && isFoundingPhase && (
+        <div className="rounded-xl border bg-amber-50 dark:bg-amber-950/20 border-amber-200 dark:border-amber-800 p-4">
+          <div className="flex items-center justify-between mb-2 flex-wrap gap-2">
+            <div>
+              <p className="text-sm font-semibold text-amber-800 dark:text-amber-300">
+                Founding Offer Active
+              </p>
+              <p className="text-xs text-amber-700/80 dark:text-amber-400/80 mt-0.5">
+                First {foundingCap} paid accounts or until {phaseDeadline} — whichever comes first
+              </p>
+            </div>
+            <div className="text-right">
+              <p className="text-lg font-bold text-amber-800 dark:text-amber-300">{paidCount} <span className="text-sm font-normal">/ {foundingCap}</span></p>
+              <p className="text-xs text-amber-600 dark:text-amber-400">paid accounts</p>
+            </div>
+          </div>
+          {/* Progress bar */}
+          <div className="h-2 rounded-full bg-amber-200 dark:bg-amber-800 overflow-hidden">
+            <div
+              className="h-full rounded-full bg-amber-500 dark:bg-amber-400 transition-all duration-700"
+              style={{ width: `${foundingPct}%` }}
+            />
+          </div>
+          <p className="text-xs text-amber-600 dark:text-amber-400 mt-1 text-right">{foundingPct}% of founding slots filled</p>
+        </div>
+      )}
+
+      {/* ── Stat cards ────────────────────────────────────────────────────── */}
       <div className="grid gap-3 grid-cols-2 lg:grid-cols-3">
         {statCards.map(({ label, value, icon: Icon, color }) => (
           <div key={label} className="rounded-xl border bg-card text-card-foreground shadow-sm">
@@ -201,8 +282,9 @@ export default function Dashboard() {
         ))}
       </div>
 
-      {/* Bottom row */}
+      {/* ── Bottom row ────────────────────────────────────────────────────── */}
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+
         {/* Audit log feed */}
         <div className="col-span-2 rounded-xl border bg-card text-card-foreground shadow-sm">
           <div className="p-6 pb-3 flex items-center justify-between">
@@ -246,7 +328,7 @@ export default function Dashboard() {
                   <div key={i} className="flex items-start space-x-4">
                     <div className={`w-2 h-2 mt-2 rounded-full shrink-0 ${ACTION_COLORS[log.action] || 'bg-slate-400'}`} />
                     <div className="flex-1 min-w-0">
-                      <p className="text-sm font-medium">{log.action} — {log.targetType}</p>
+                      <p className="text-sm font-medium capitalize">{log.action} — {log.targetType}</p>
                       <p className="text-xs text-muted-foreground truncate">{log.adminEmail}</p>
                       <p className="text-xs text-muted-foreground mt-0.5">{timeAgo(log.timestamp || log.createdAt)}</p>
                     </div>
@@ -291,8 +373,8 @@ export default function Dashboard() {
                       dataKey="value"
                       paddingAngle={3}
                     >
-                      {finalPlanData.map((_, i) => (
-                        <Cell key={i} fill={PLAN_COLORS[i % PLAN_COLORS.length]} />
+                      {finalPlanData.map((d, i) => (
+                        <Cell key={i} fill={planColor(d.rawKey) || PLAN_COLOR_LIST[i % PLAN_COLOR_LIST.length]} />
                       ))}
                     </Pie>
                     <Tooltip
@@ -306,11 +388,16 @@ export default function Dashboard() {
                     />
                   </PieChart>
                 </ResponsiveContainer>
+
+                {/* Legend */}
                 <div className="space-y-2 mt-2">
                   {finalPlanData.map((d, i) => (
                     <div key={d.name} className="flex items-center justify-between text-sm">
                       <div className="flex items-center gap-2">
-                        <div className="w-2 h-2 rounded-full flex-shrink-0" style={{ background: PLAN_COLORS[i % PLAN_COLORS.length] }} />
+                        <div
+                          className="w-2 h-2 rounded-full flex-shrink-0"
+                          style={{ background: planColor(d.rawKey) || PLAN_COLOR_LIST[i % PLAN_COLOR_LIST.length] }}
+                        />
                         <span className="capitalize">{d.name}</span>
                       </div>
                       <div className="flex items-center gap-1.5">
@@ -322,6 +409,7 @@ export default function Dashboard() {
                     </div>
                   ))}
                 </div>
+
                 {finalMrr > 0 && (
                   <div className="mt-4 pt-3 border-t flex items-center justify-between text-sm">
                     <span className="text-muted-foreground">Est. MRR</span>
@@ -332,6 +420,7 @@ export default function Dashboard() {
             )}
           </div>
         </div>
+
       </div>
     </div>
   )
