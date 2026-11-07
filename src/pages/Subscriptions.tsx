@@ -14,8 +14,8 @@ const PLANS_ORDER = ['free', 'growth', 'pro', 'scale']
 /** Founding-phase prices and standard fallback prices per plan */
 const PLAN_PRICE_CONTEXT: Record<string, { foundingMonthly?: number; foundingAnnual?: number; standardMonthly?: number; standardAnnual?: number; isFree?: boolean; isCustom?: boolean }> = {
   free:   { isFree: true },
-  growth: { foundingAnnual: 7.99, foundingMonthly: 9.99,  standardAnnual: 9.99,  standardMonthly: 11.99 },
-  pro:    { foundingAnnual: 10.99, foundingMonthly: 12.99, standardAnnual: 12.99, standardMonthly: 14.99 },
+  growth: { foundingAnnual: 15,   foundingMonthly: 19,   standardAnnual: 23,   standardMonthly: 29   },
+  pro:    { foundingAnnual: 23,   foundingMonthly: 29,   standardAnnual: 39,   standardMonthly: 49   },
   scale:  { isCustom: true },
 }
 
@@ -270,9 +270,9 @@ function CompanySubPanel({ company, onRefresh }: { company: any; onRefresh: () =
                     className="flex h-8 w-full rounded-md border border-input bg-input-background px-2 py-1.5 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                   >
                     <option value="free">Free ($0)</option>
-                    <option value="growth">Growth — Founding $7.99–$9.99/mo · Std $9.99–$11.99/mo</option>
-                    <option value="pro">Pro — Founding $10.99–$12.99/mo · Std $12.99–$14.99/mo</option>
-                    <option value="scale">Scale (Custom, from $25)</option>
+                    <option value="growth">Growth — Founding $15/mo annual · $19/mo monthly</option>
+                    <option value="pro">Pro — Founding $23/mo annual · $29/mo monthly</option>
+                    <option value="scale">Scale (Custom, from $79)</option>
                   </select>
                 </div>
                 <div className="space-y-1">
@@ -377,9 +377,9 @@ function CompanySubPanel({ company, onRefresh }: { company: any; onRefresh: () =
                 <div className="space-y-1">
                   <label className="text-xs font-medium text-muted-foreground">Amount (USD) *</label>
                   <input type="number" value={payAmount} onChange={e => setPayAmount(e.target.value)} placeholder={
-                    planId === 'growth' ? (billingInterval === 'annual' ? '95.88' : '9.99')
-                    : planId === 'pro'  ? (billingInterval === 'annual' ? '131.88' : '12.99')
-                    : '25'
+                    planId === 'growth' ? (billingInterval === 'annual' ? '180' : '19')
+                    : planId === 'pro'  ? (billingInterval === 'annual' ? '276' : '29')
+                    : '79'
                   }
                     className="flex h-8 w-full rounded-md border border-input bg-input-background px-2 py-1.5 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring" />
                 </div>
@@ -644,7 +644,7 @@ export default function Subscriptions() {
                         ) : ctx.isCustom ? (
                           <div>
                             <p className="text-2xl font-bold">Custom</p>
-                            <p className="text-xs text-muted-foreground">From $25 / negotiated per deal</p>
+                            <p className="text-xs text-muted-foreground">From $79 / negotiated per deal</p>
                           </div>
                         ) : (
                           <div>

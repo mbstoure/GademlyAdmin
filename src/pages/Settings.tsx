@@ -17,9 +17,9 @@ function formatSessionTime(iso: string): string {
     const diff = Date.now() - d.getTime()
     const m = Math.floor(diff / 60_000)
     const h = Math.floor(diff / 3_600_000)
-    if (m < 2)   return 'just now'
-    if (m < 60)  return `${m}m ago`
-    if (h < 24)  return `${h}h ago`
+    if (m < 2) return 'just now'
+    if (m < 60) return `${m}m ago`
+    if (h < 24) return `${h}h ago`
     return d.toLocaleString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })
   } catch { return iso }
 }
@@ -40,10 +40,10 @@ function getStrength(pw: string): { score: number; label: string; color: string 
 }
 
 const PW_RULES = [
-  { label: 'At least 8 characters',  test: (pw: string) => pw.length >= 8 },
-  { label: 'One uppercase letter',    test: (pw: string) => /[A-Z]/.test(pw) },
-  { label: 'One number',              test: (pw: string) => /[0-9]/.test(pw) },
-  { label: 'One special character',   test: (pw: string) => /[^A-Za-z0-9]/.test(pw) },
+  { label: 'At least 8 characters', test: (pw: string) => pw.length >= 8 },
+  { label: 'One uppercase letter', test: (pw: string) => /[A-Z]/.test(pw) },
+  { label: 'One number', test: (pw: string) => /[0-9]/.test(pw) },
+  { label: 'One special character', test: (pw: string) => /[^A-Za-z0-9]/.test(pw) },
 ]
 
 function Toggle({ on, onToggle, danger = false, label = 'Toggle' }: { on: boolean; onToggle: () => void; danger?: boolean; label?: string }) {
@@ -79,10 +79,10 @@ function SettingRow({ label, description, children, danger = false }: {
 type Tab = 'platform' | 'security' | 'sessions' | 'access'
 
 const TABS: { id: Tab; label: string; icon: React.ElementType }[] = [
-  { id: 'platform', label: 'Platform',       icon: Settings2 },
-  { id: 'security', label: 'Security',        icon: Lock },
-  { id: 'sessions', label: 'Sessions',        icon: Activity },
-  { id: 'access',   label: 'Access Control',  icon: ShieldCheck },
+  { id: 'platform', label: 'Platform', icon: Settings2 },
+  { id: 'security', label: 'Security', icon: Lock },
+  { id: 'sessions', label: 'Sessions', icon: Activity },
+  { id: 'access', label: 'Access Control', icon: ShieldCheck },
 ]
 
 export default function Settings() {
@@ -94,22 +94,22 @@ export default function Settings() {
   const [saving, setSaving] = useState(false)
 
   // ── Password change ───────────────────────────────────────────────────────
-  const [newPw, setNewPw]         = useState('')
+  const [newPw, setNewPw] = useState('')
   const [confirmPw, setConfirmPw] = useState('')
-  const [showNew, setShowNew]     = useState(false)
-  const [showConf, setShowConf]   = useState(false)
+  const [showNew, setShowNew] = useState(false)
+  const [showConf, setShowConf] = useState(false)
   const [changingPw, setChangingPw] = useState(false)
 
-  const strength       = getStrength(newPw)
+  const strength = getStrength(newPw)
   const passwordsMatch = newPw.length > 0 && newPw === confirmPw
 
   // ── Sessions ─────────────────────────────────────────────────────────
   const [trackingEnabled, setTrackingEnabled] = useState(isSessionTrackingEnabled)
-  const [sessions, setSessions]               = useState<AdminSession[]>([])
+  const [sessions, setSessions] = useState<AdminSession[]>([])
   const [loadingSessions, setLoadingSessions] = useState(false)
-  const [sessionError, setSessionError]       = useState<string | null>(null)
-  const [revokingId, setRevokingId]           = useState<string | null>(null)
-  const [copiedSql, setCopiedSql]             = useState(false)
+  const [sessionError, setSessionError] = useState<string | null>(null)
+  const [revokingId, setRevokingId] = useState<string | null>(null)
+  const [copiedSql, setCopiedSql] = useState(false)
 
   // ── IP Allowlist ──────────────────────────────────────────────────────────
   const [newIp, setNewIp] = useState('')
@@ -119,7 +119,7 @@ export default function Settings() {
     try {
       const res = await adminApi.getSettings()
       setLocal(res)
-    } catch {}
+    } catch { }
     setLoading(false)
   }, [])
 
@@ -239,7 +239,7 @@ CREATE POLICY "admin_sessions_delete" ON public.admin_sessions
   }
 
   const toggleField = (key: string) => setLocal({ ...local, [key]: !local[key] })
-  const setField    = (key: string, v: any) => setLocal({ ...local, [key]: v })
+  const setField = (key: string, v: any) => setLocal({ ...local, [key]: v })
 
   if (loading) return (
     <div className="flex items-center justify-center py-16 text-muted-foreground">
@@ -293,7 +293,7 @@ CREATE POLICY "admin_sessions_delete" ON public.admin_sessions
                 type="email"
                 value={local.supportEmail || ''}
                 onChange={e => setField('supportEmail', e.target.value)}
-                placeholder="billing@gademly.com"
+                placeholder="info@gademly.com"
                 className="flex h-9 w-44 rounded-md border border-input bg-input-background px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring text-right"
               />
             </SettingRow>
@@ -373,7 +373,7 @@ CREATE POLICY "admin_sessions_delete" ON public.admin_sessions
                       </span>
                     </div>
                     <div className="flex gap-1">
-                      {[1,2,3,4,5].map(i => (
+                      {[1, 2, 3, 4, 5].map(i => (
                         <div key={i} className={`h-1.5 flex-1 rounded-full transition-colors ${i <= strength.score ? strength.color : 'bg-muted'}`} />
                       ))}
                     </div>
@@ -536,7 +536,7 @@ CREATE POLICY "admin_sessions_delete" ON public.admin_sessions
                           ${s.isCurrent ? 'bg-green-100 dark:bg-green-900/30' : 'bg-muted'}`}>
                           {s.device === 'Mobile' || s.device === 'Tablet'
                             ? <Smartphone className={`h-5 w-5 ${s.isCurrent ? 'text-green-600' : 'text-muted-foreground'}`} />
-                            : <Monitor   className={`h-5 w-5 ${s.isCurrent ? 'text-green-600' : 'text-muted-foreground'}`} />}
+                            : <Monitor className={`h-5 w-5 ${s.isCurrent ? 'text-green-600' : 'text-muted-foreground'}`} />}
                         </div>
                         <div className="flex-1 min-w-0 space-y-1">
                           <div className="flex items-center gap-2 flex-wrap">
