@@ -179,7 +179,7 @@ export default function Dashboard() {
   // ── Founding-phase progress ───────────────────────────────────────────────
   const currentPhase    = pricingConfig?.currentPhase ?? stats?.currentPhase
   const paidCount       = pricingConfig?.paidAccountCount ?? stats?.paidAccountCount ?? 0
-  const foundingCap     = 500
+  const foundingCap     = 50
   const foundingPct     = Math.min(100, Math.round((paidCount / foundingCap) * 100))
   const isFoundingPhase = ['1','2','3'].includes(String(currentPhase))
   const phaseDeadline   = 'Aug 31, 2027'
@@ -246,7 +246,7 @@ export default function Dashboard() {
                 Founding Offer Active
               </p>
               <p className="text-xs text-amber-700/80 dark:text-amber-400/80 mt-0.5">
-                First {foundingCap} paid accounts or until {phaseDeadline} — whichever comes first
+                First {foundingCap} paid companies or until {phaseDeadline} — whichever comes first
               </p>
             </div>
             <div className="text-right">

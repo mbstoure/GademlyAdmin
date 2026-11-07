@@ -324,7 +324,7 @@ function CompanySubPanel({ company, onRefresh }: { company: any; onRefresh: () =
               {pricingPhase && (
                 <div className="rounded-md bg-muted/50 border border-border px-3 py-2 text-xs flex items-center gap-2">
                   {isFoundingMember
-                    ? <><Star className="h-3.5 w-3.5 text-amber-500 shrink-0" /> <span>This company locked in <strong>{phaseLabel(pricingPhase)}</strong> pricing — they keep this rate as long as their subscription stays active.</span></>
+                    ? <><Star className="h-3.5 w-3.5 text-amber-500 shrink-0" /> <span>This company locked in <strong>{phaseLabel(pricingPhase)}</strong> pricing on their <strong>{prettyPlan((sub as any)?.planId)}</strong> plan — that price is locked for as long as this subscription stays active. Upgrades to a higher plan use the then-current phase price.</span></>
                     : <><Shield className="h-3.5 w-3.5 text-muted-foreground shrink-0" /> <span>Standard pricing (no founding phase applied).</span></>
                   }
                 </div>
@@ -511,7 +511,7 @@ export default function Subscriptions() {
   // ── Phase config helpers ──────────────────────────────────────────────────
   const currentPhase    = pricingCfg?.currentPhase
   const paidCount       = pricingCfg?.paidAccountCount ?? 0
-  const foundingCap     = 500
+  const foundingCap     = 50
   const foundingPct     = Math.min(100, Math.round((paidCount / foundingCap) * 100))
   const isFoundingPhase = ['1','2','3'].includes(String(currentPhase))
   const phaseDeadline   = 'Aug 31, 2027'
@@ -554,10 +554,10 @@ export default function Subscriptions() {
               </div>
               <div className="grid grid-cols-4 gap-2 text-xs">
                 {[
-                  { phase: '1', label: 'Phase 1',  slots: '0–150' },
-                  { phase: '2', label: 'Phase 2',  slots: '151–350' },
-                  { phase: '3', label: 'Phase 3',  slots: '351–500' },
-                  { phase: 'std', label: 'Standard', slots: '500+' },
+                  { phase: '1', label: 'Phase 1',  slots: '0–17' },
+                  { phase: '2', label: 'Phase 2',  slots: '18–34' },
+                  { phase: '3', label: 'Phase 3',  slots: '35–50' },
+                  { phase: 'std', label: 'Standard', slots: '50+' },
                 ].map(p => (
                   <div key={p.phase}
                     className={`rounded px-2 py-1.5 text-center border ${String(currentPhase) === p.phase ? 'bg-amber-100 dark:bg-amber-900/40 border-amber-400 dark:border-amber-600 font-semibold' : 'bg-muted/40 border-transparent text-muted-foreground'}`}
